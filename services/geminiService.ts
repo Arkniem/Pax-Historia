@@ -116,7 +116,7 @@ export async function simulateWorldEvents(gameState: GameState, playerAction: st
 
         CRITICAL INSTRUCTION: Your simulation must be realistic. A country's economic power (GDP, resources), population, stability, and military strength are paramount. A small, weak nation cannot conquer a superpower. An action's outcome must be proportional to the country's capabilities. If an action is outrageous (e.g., 'Luxembourg annexes China'), generate events describing the diplomatic fallout, economic sanctions, or utter failure.
 
-        NEW DIPLOMACY EVENTS: You can now generate 'CHAT_INVITATION' events. This allows AI countries to proactively start conversations with the player and other AI nations. For this event type, you MUST specify 'chatInitiator' and 'chatParticipants'. This is a powerful tool to create dynamic international relations, alliances, or crises.
+        NEW DIPLOMACY EVENTS: You can now generate 'CHAT_INVITATION' events. These should be used sparingly and only when there is a strong geopolitical reason (e.g., a border crisis, a shared threat, an opportunity for a major trade deal). Do not create them every year. For this event type, you MUST specify 'chatInitiator' and 'chatParticipants'. This is a powerful tool to create dynamic international relations, alliances, or crises.
 
         NEW DYNAMIC CITY EVENTS: You can now manipulate cities.
         - CITY_FOUNDED: Create a new city. Provide 'newCityName', 'territoryForNewCity', and 'newCityCoordinates'. Do this for colonization, new capitals, etc. The coordinates must be realistic for the territory.
@@ -153,7 +153,7 @@ export async function simulateWorldEvents(gameState: GameState, playerAction: st
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-2.5-pro",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -205,6 +205,20 @@ export async function getGroupChatTurn(
      if (!gameState.playerCountryName) {
         throw new Error("Player country not set.");
     }
+    
+    const allCurrentParticipants = new Set(chat.participants);
+    const previousConversationsSummary = Object.values(gameState.chats)
+        .filter(c => 
+            c.id !== chat.id && 
+            c.messages.length > 0 && 
+            c.participants.some(p => allCurrentParticipants.has(p))
+        )
+        .map(c => {
+            const history = c.messages.slice(-4).map(m => `${m.sender}: ${m.text}`).join('\n');
+            return `From a past discussion on "${c.topic}":\n${history}`;
+        })
+        .join('\n\n');
+
     const participantDetails = chat.participants.map(pName => {
         const pData = gameState.countries[pName];
         if (!pData) return `${pName} (Details unknown)`;
@@ -219,6 +233,9 @@ export async function getGroupChatTurn(
     const prompt = `
         You are a master diplomat AI, facilitating a conversation between world leaders.
         The current year is ${gameState.year}. The player controls ${gameState.playerCountryName}.
+
+        ${previousConversationsSummary ? `IMPORTANT CONTEXT FROM PAST CONVERSATIONS (You must be consistent with this history):\n${previousConversationsSummary}\n\n` : ''}
+
         The topic of this conversation is: "${chat.topic}"
 
         Participants in this conversation:
@@ -262,10 +279,10 @@ export async function getGroupChatTurn(
     } catch (error) {
         console.error("Error calling Gemini API for group chat turn:", error);
         // Fallback: Default to the player's turn on error
-        if (isDelegation) {
+        if (isDelegation && otherParticipants.length > 0) {
             return {
-                nextSpeaker: gameState.playerCountryName,
-                message: "Your attempt to delegate was unclear to the diplomatic corps. The floor returns to you."
+                nextSpeaker: otherParticipants[0], // Pick someone else if possible
+                message: `The diplomatic corps seems confused by ${gameState.playerCountryName}'s silence, so I will speak.`
             }
         }
         return { 
@@ -294,26 +311,31 @@ const advisorSchema = {
 
 export async function getAdvisorResponse(
     gameState: GameState,
-    targetCountryName: string,
+    chat: DiplomaticChat,
     playerMessage: string,
-    chatHistory: string,
 ): Promise<AdvisorSuggestion> {
     if (!gameState.playerCountryName) {
         throw new Error("Player country not set.");
     }
     const playerCountry = gameState.countries[gameState.playerCountryName];
-    const targetCountry = gameState.countries[targetCountryName];
+    const chatHistory = chat.messages.map(m => `${m.sender}: ${m.text}`).join('\n');
+    
+    const participantsDetails = chat.participants
+        .map(pName => {
+            const pData = gameState.countries[pName];
+            if (!pData) return `- ${pName} (Details unknown)`;
+            const role = pName === playerCountry.name ? "(Your Nation)" : "";
+            return `- ${pName} ${role}: GDP: ${pData.gdp}B, Pop: ${pData.population}M, Stability: ${pData.stability}%, Military: ${pData.militaryStrength}`;
+        })
+        .join('\n');
 
     const prompt = `
         You are a seasoned and shrewd diplomatic advisor serving the leader of ${playerCountry.name}.
         The current year is ${gameState.year}.
-        Your leader is in a diplomatic conversation with ${targetCountryName}.
+        Your leader is in a diplomatic conversation regarding "${chat.topic}".
 
-        Your Nation's Status:
-        - GDP: ${playerCountry.gdp}B, Population: ${playerCountry.population}M, Stability: ${playerCountry.stability}%, Military: ${playerCountry.militaryStrength}
-
-        Target Nation's Status:
-        - GDP: ${targetCountry.gdp}B, Population: ${targetCountry.population}M, Stability: ${targetCountry.stability}%, Military: ${targetCountry.militaryStrength}
+        Participants in this conversation:
+        ${participantsDetails}
 
         Conversation History:
         ${chatHistory.trim() ? chatHistory : "This is the start of the conversation."}
@@ -321,7 +343,7 @@ export async function getAdvisorResponse(
         Your leader has drafted the following message to send:
         "${playerMessage}"
 
-        Your task is to analyze this message and improve it. Your goal is to be effective, not just polite. Consider the geopolitical context, the power dynamics between the two nations, and the conversation history. The revised message should be strategic, advancing your nation's interests.
+        Your task is to analyze this message and improve it. Your goal is to be effective, not just polite. Consider the geopolitical context, the power dynamics between all nations involved, and the conversation history. The revised message should be strategic, advancing your nation's interests in this multi-party discussion.
 
         Provide your response in two parts:
         1.  **suggestion**: The improved message, ready to be sent. It should be written from the perspective of your leader.

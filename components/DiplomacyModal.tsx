@@ -18,13 +18,10 @@ interface DiplomacyModalProps {
   onSendMessage: (chatId: string, message: string) => void;
   onDelegateTurn: (chatId: string) => void;
   onInterrupt: (chatId: string) => void;
-  onAskAdvisor: (message: string) => void;
+  onAskAdvisorForChat: (chatId: string, message: string) => Promise<string>;
   isAdvising: boolean;
-  advisorSuggestion: AdvisorSuggestion | null;
-  onClearAdvisorSuggestion: () => void;
 }
 
-// FIX: Added strong types to component props to fix 'unknown' type errors.
 interface ChatLobbyProps {
     gameState: GameState;
     onOpenChat: (chatId: string) => void;
@@ -35,8 +32,13 @@ interface ChatLobbyProps {
 const ChatLobby = ({ gameState, onOpenChat, onStartNewChat, onClose }: ChatLobbyProps) => {
     const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
     const [topic, setTopic] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
     const playerCountryName = gameState.playerCountryName;
     const otherCountries = Object.keys(gameState.countries).filter(c => c !== playerCountryName).sort();
+
+    const filteredCountries = searchTerm
+        ? otherCountries.filter(name => name.toLowerCase().includes(searchTerm.toLowerCase()))
+        : otherCountries;
 
     const handleToggleCountry = (countryName: string) => {
         setSelectedCountries(prev => 
@@ -77,8 +79,15 @@ const ChatLobby = ({ gameState, onOpenChat, onStartNewChat, onClose }: ChatLobby
                         <input type="text" value={topic} onChange={e => setTopic(e.target.value)} placeholder="Topic of discussion..." className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary" />
                         <div>
                             <p className="text-sm text-gray-400 mb-2">Select participants:</p>
+                            <input 
+                                type="text" 
+                                value={searchTerm} 
+                                onChange={e => setSearchTerm(e.target.value)} 
+                                placeholder="Search for a country..." 
+                                className="w-full bg-gray-900 rounded px-3 py-2 mb-2 text-white focus:outline-none focus:ring-1 focus:ring-primary" 
+                            />
                             <div className="max-h-40 overflow-y-auto bg-gray-900 p-2 rounded">
-                                {otherCountries.map(name => (
+                                {filteredCountries.map(name => (
                                     <label key={name} className="flex items-center space-x-2 p-1 cursor-pointer hover:bg-gray-700 rounded">
                                         <input type="checkbox" checked={selectedCountries.includes(name)} onChange={() => handleToggleCountry(name)} className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 text-primary focus:ring-primary"/>
                                         <span>{name}</span>
@@ -96,7 +105,6 @@ const ChatLobby = ({ gameState, onOpenChat, onStartNewChat, onClose }: ChatLobby
     );
 };
 
-// FIX: Added strong types to component props to fix 'unknown' type errors.
 interface ChatViewProps {
     gameState: GameState;
     chat: DiplomaticChat;
@@ -104,18 +112,17 @@ interface ChatViewProps {
     onSendMessage: (chatId: string, message: string) => void;
     onDelegateTurn: (chatId: string) => void;
     onInterrupt: (chatId: string) => void;
-    onAskAdvisor: (message: string) => void;
+    onAskAdvisorForChat: (chatId: string, message: string) => Promise<string>;
     isAdvising: boolean;
-    advisorSuggestion: AdvisorSuggestion | null;
-    onClearAdvisorSuggestion: () => void;
 }
 
-const ChatView = ({ gameState, chat, onClose, onSendMessage, onDelegateTurn, onInterrupt, onAskAdvisor, isAdvising, advisorSuggestion, onClearAdvisorSuggestion }: ChatViewProps) => {
+const ChatView = ({ gameState, chat, onClose, onSendMessage, onDelegateTurn, onInterrupt, onAskAdvisorForChat, isAdvising }: ChatViewProps) => {
     const [message, setMessage] = useState('');
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const playerCountryName = gameState.playerCountryName;
     const isPlayersTurn = chat.currentSpeaker === playerCountryName;
     const isAiThinking = chat.currentSpeaker === null;
+    const isGroupChat = chat.participants.length > 2;
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -129,11 +136,10 @@ const ChatView = ({ gameState, chat, onClose, onSendMessage, onDelegateTurn, onI
         }
     };
     
-    const useSuggestion = () => {
-        if (advisorSuggestion) {
-            setMessage(advisorSuggestion.suggestion);
-            onClearAdvisorSuggestion();
-        }
+    const handleAdviseClick = async () => {
+        if (!message.trim() || isAdvising) return;
+        const suggestion = await onAskAdvisorForChat(chat.id, message);
+        setMessage(suggestion);
     };
 
     return (
@@ -146,7 +152,7 @@ const ChatView = ({ gameState, chat, onClose, onSendMessage, onDelegateTurn, onI
                 <p className="text-xs text-gray-400 mt-1 truncate">Participants: {chat.participants.join(', ')}</p>
             </header>
             <div className="flex-1 p-4 overflow-y-auto">
-                {chat.messages.map((msg: any, index: number) => (
+                {chat.messages.map((msg, index) => (
                     <div key={index} className={`flex mb-4 ${msg.sender === playerCountryName ? 'justify-end' : 'justify-start'}`}>
                         <div className="max-w-md">
                             <p className={`text-xs mb-1 ${msg.sender === playerCountryName ? 'text-right' : 'text-left'} text-gray-400`}>{msg.sender}</p>
@@ -168,38 +174,21 @@ const ChatView = ({ gameState, chat, onClose, onSendMessage, onDelegateTurn, onI
                 <div ref={messagesEndRef} />
             </div>
             <footer className="p-4 border-t border-gray-700">
-                {advisorSuggestion && (
-                    <div className="bg-gray-700 border-l-4 border-indigo-400 p-4 rounded-r-lg mb-4">
-                        <div className="flex justify-between items-start">
-                             <div>
-                                <h4 className="font-bold text-indigo-300">Advisor's Suggestion</h4>
-                                <p className="text-sm text-gray-400 mt-1 italic">"{advisorSuggestion.reasoning}"</p>
-                            </div>
-                             <button onClick={onClearAdvisorSuggestion} className="text-gray-500 hover:text-white text-xl">&times;</button>
-                        </div>
-                        <div className="mt-3 p-3 bg-gray-800 rounded">
-                            <p className="text-sm text-gray-200 whitespace-pre-wrap">{advisorSuggestion.suggestion}</p>
-                        </div>
-                        <div className="mt-3 flex justify-end">
-                            <button onClick={useSuggestion} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm py-1 px-3 rounded-lg transition">
-                                Use This Text
-                            </button>
-                        </div>
-                    </div>
-                )}
                 {isPlayersTurn ? (
                     <form onSubmit={handleSubmit} className="flex space-x-2">
                          <input type="text" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Your response..." className="flex-1 bg-gray-700 text-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary" />
-                         <button type="button" onClick={() => onAskAdvisor(message)} disabled={!message.trim() || isAdvising} className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg transition">{isAdvising ? '...' : 'Advise'}</button>
-                         <button type="button" onClick={() => onDelegateTurn(chat.id)} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg transition">Delegate</button>
+                         <button type="button" onClick={handleAdviseClick} disabled={!message.trim() || isAdvising} className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg transition">{isAdvising ? '...' : 'Advise'}</button>
+                         {isGroupChat && <button type="button" onClick={() => onDelegateTurn(chat.id)} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg transition">Delegate</button>}
                          <button type="submit" disabled={!message.trim()} className="bg-primary hover:bg-blue-600 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">Send</button>
                     </form>
                 ) : (
                     <div className="text-center">
                         <p className="text-sm text-gray-400 mb-2">{isAiThinking ? 'Waiting for response...' : `Waiting for ${chat.currentSpeaker}`}</p>
-                        <button onClick={() => onInterrupt(chat.id)} disabled={isAiThinking} className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">
-                            Interrupt
-                        </button>
+                        {isGroupChat && 
+                            <button onClick={() => onInterrupt(chat.id)} disabled={isAiThinking} className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">
+                                Interrupt
+                            </button>
+                        }
                     </div>
                 )}
             </footer>
@@ -207,7 +196,6 @@ const ChatView = ({ gameState, chat, onClose, onSendMessage, onDelegateTurn, onI
     );
 };
 
-// FIX: Added strong types to component props to fix 'unknown' type errors.
 interface InvitationViewProps {
     invitations: WorldEvent[];
     onAccept: (invitation: WorldEvent) => void;
@@ -229,7 +217,7 @@ const InvitationView = ({ invitations, onAccept, onDecline }: InvitationViewProp
                 <div className="mb-4">
                     <h4 className="font-semibold text-gray-200 mb-2">Invited Parties:</h4>
                     <ul className="list-disc list-inside text-gray-400">
-                        {invitation.chatParticipants?.map((p: string) => <li key={p}>{p}</li>)}
+                        {invitation.chatParticipants?.map((p) => <li key={p}>{p}</li>)}
                     </ul>
                 </div>
                 <div className="flex justify-end space-x-3 mt-6">

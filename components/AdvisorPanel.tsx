@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 
 interface AdvisorPanelProps {
@@ -44,7 +45,7 @@ export default function AdvisorPanel({ onAskAdvice, isAdvising, advice }: Adviso
                 </button>
             </form>
             {advice && (
-                <div className="mt-4 p-3 bg-gray-700 rounded-lg">
+                <div className="mt-4 p-3 bg-gray-700 rounded-lg max-h-48 overflow-y-auto">
                     <h3 className="font-semibold text-indigo-300">Advisor's Counsel:</h3>
                     <p className="text-sm text-gray-300 whitespace-pre-wrap">{advice}</p>
                 </div>

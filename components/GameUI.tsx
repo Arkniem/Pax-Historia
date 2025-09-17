@@ -1,12 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GameState, WorldEvent, Country, AdvisorSuggestion, MapData, DiplomaticChat } from '../types';
 import WorldMap from './WorldMap';
 import EventLog from './EventLog';
 import DiplomacyModal from './DiplomacyModal';
 import Header from './Header';
 import CountryStatsPanel from './CountryStatsPanel';
-import { simulateWorldEvents, getGeneralAdvice } from '../services/geminiService';
+import { simulateWorldEvents, getGeneralAdvice, getAdvisorResponse } from '../services/geminiService';
 
 interface GameUIProps {
   gameState: GameState;
@@ -19,6 +19,7 @@ interface GameUIProps {
   onSendMessage: (chatId: string, message: string) => void;
   onDelegateTurn: (chatId: string) => void;
   onInterrupt: (chatId: string) => void;
+  onLoadGame: (loadedGameState: GameState) => void;
 }
 
 type DiplomacyView = 'closed' | 'lobby' | 'chat' | 'invitations';
@@ -96,7 +97,7 @@ const AdvisorPanel = ({ onAskAdvice, isAdvising, advice }: { onAskAdvice: (quest
                 </button>
             </form>
             {advice && (
-                <div className="mt-4 p-3 bg-gray-700 rounded-lg">
+                <div className="mt-4 p-3 bg-gray-700 rounded-lg max-h-48 overflow-y-auto">
                     <h3 className="font-semibold text-indigo-300">Advisor's Counsel:</h3>
                     <p className="text-sm text-gray-300 whitespace-pre-wrap">{advice}</p>
                 </div>
@@ -116,6 +117,7 @@ export default function GameUI({
   onSendMessage,
   onDelegateTurn,
   onInterrupt,
+  onLoadGame,
 }: GameUIProps) {
   const [isSimulating, setIsSimulating] = useState(false);
   const [diplomacyView, setDiplomacyView] = useState<DiplomacyView>('closed');
@@ -124,10 +126,12 @@ export default function GameUI({
   const [isAdvisorModalOpen, setIsAdvisorModalOpen] = useState(false);
   const [isEventsPanelOpen, setIsEventsPanelOpen] = useState(false);
   const [selectedCountryForStats, setSelectedCountryForStats] = useState<Country | null>(null);
+  const [isGameMenuOpen, setIsGameMenuOpen] = useState(false);
   
   const [isAdvising, setIsAdvising] = useState(false);
-  const [advisorSuggestion, setAdvisorSuggestion] = useState<AdvisorSuggestion | null>(null);
   const [generalAdvice, setGeneralAdvice] = useState<string | null>(null);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (pendingInvitations.length > 0 && !isSimulating) {
@@ -182,6 +186,24 @@ export default function GameUI({
           setIsAdvising(false);
       }
   };
+  
+  const handleAskAdvisorForChat = async (chatId: string, message: string): Promise<string> => {
+    setIsAdvising(true);
+    const chat = gameState.chats[chatId];
+    if (!chat) {
+        setIsAdvising(false);
+        return message; // Return original message if chat not found
+    }
+    try {
+        const { suggestion } = await getAdvisorResponse(gameState, chat, message);
+        return suggestion;
+    } catch (error) {
+        console.error("Error getting advisor suggestion:", error);
+        return message; // Return original on error
+    } finally {
+        setIsAdvising(false);
+    }
+  };
 
   const handleAcceptAndOpenChat = (invitation: WorldEvent) => {
     const newChatId = onAcceptInvitation(invitation);
@@ -205,6 +227,41 @@ export default function GameUI({
     }
   };
 
+  const handleSaveGame = () => {
+    if (!gameState) return;
+    const saveData = JSON.stringify(gameState, null, 2); // Pretty print JSON
+    const blob = new Blob([saveData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `world-sim-save-${gameState.year}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result;
+        if (typeof text !== 'string') throw new Error("Failed to read file");
+        const loadedState = JSON.parse(text);
+        onLoadGame(loadedState);
+      } catch (error) {
+        console.error("Failed to load game:", error);
+        alert("Failed to load save file. It may be corrupted or in an invalid format.");
+      }
+    };
+    reader.readAsText(file);
+    // Reset the input value to allow loading the same file again if needed
+    event.target.value = '';
+  };
+
   const playerCountry = gameState.countries[gameState.playerCountryName!];
   const activeChat = activeChatId ? gameState.chats[activeChatId] : null;
 
@@ -226,7 +283,7 @@ export default function GameUI({
             onClose={() => setSelectedCountryForStats(null)} 
           />
           <div className="absolute bottom-4 left-4 flex space-x-2 z-20">
-               <button 
+              <button 
                   onClick={() => setIsActionModalOpen(true)}
                   className="bg-gray-900 text-2xl text-white font-bold p-3 rounded-full shadow-lg hover:bg-gray-700 transition"
                   title="National Action"
@@ -254,6 +311,41 @@ export default function GameUI({
               >
                   🌍
               </button>
+              <div className="border-l-2 border-gray-700 mx-1"></div>
+               <div className="relative flex items-center">
+                  <button 
+                      onClick={() => setIsGameMenuOpen(prev => !prev)}
+                      className="bg-gray-900 text-2xl text-white font-bold p-3 rounded-full shadow-lg hover:bg-gray-700 transition"
+                      title="Game Options"
+                  >
+                      ⚙️
+                  </button>
+                  {isGameMenuOpen && (
+                      <div className="absolute bottom-0 left-full ml-2 flex space-x-2 animate-fade-in-menu">
+                           <button 
+                              onClick={handleSaveGame}
+                              className="bg-gray-900 text-2xl text-white font-bold p-3 rounded-full shadow-lg hover:bg-gray-700 transition"
+                              title="Save Game"
+                          >
+                              💾
+                          </button>
+                          <button 
+                              onClick={() => fileInputRef.current?.click()}
+                              className="bg-gray-900 text-2xl text-white font-bold p-3 rounded-full shadow-lg hover:bg-gray-700 transition"
+                              title="Load Game"
+                          >
+                              📂
+                          </button>
+                      </div>
+                  )}
+              </div>
+              <input 
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept=".json"
+                className="hidden"
+              />
           </div>
         </main>
       </div>
@@ -285,12 +377,19 @@ export default function GameUI({
           onSendMessage={onSendMessage}
           onDelegateTurn={onDelegateTurn}
           onInterrupt={onInterrupt}
-          onAskAdvisor={() => { /* Placeholder, advisor logic is complex */ }}
+          onAskAdvisorForChat={handleAskAdvisorForChat}
           isAdvising={isAdvising}
-          advisorSuggestion={advisorSuggestion}
-          onClearAdvisorSuggestion={() => setAdvisorSuggestion(null)}
         />
       )}
+      <style>{`
+        @keyframes fade-in-menu {
+            from { opacity: 0; transform: scale(0.95) translateX(-10px); }
+            to { opacity: 1; transform: scale(1) translateX(0); }
+        }
+        .animate-fade-in-menu {
+            animation: fade-in-menu 0.2s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 }

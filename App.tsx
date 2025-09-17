@@ -349,6 +349,18 @@ export default function App() {
     setPendingInvitations(prev => prev.filter(inv => inv !== invitation));
   };
 
+  const handleLoadGame = (loadedGameState: GameState) => {
+    // Basic validation to ensure it's a valid save file
+    if (loadedGameState && loadedGameState.countries && loadedGameState.playerCountryName && loadedGameState.year) {
+        setGameState(loadedGameState);
+        setGamePhase(GamePhase.PLAYING);
+        setPendingInvitations([]); // Clear any pending invitations from the old state
+        console.log("Game loaded successfully!");
+    } else {
+        alert("The loaded save file is invalid or corrupted.");
+    }
+  };
+
 
   const renderContent = () => {
     if (gamePhase === GamePhase.LOADING || !gameState || !mapData) {
@@ -395,6 +407,7 @@ export default function App() {
           onSendMessage={handleSendMessage}
           onDelegateTurn={handleDelegateTurn}
           onInterrupt={handleInterrupt}
+          onLoadGame={handleLoadGame}
         />
       );
     }
