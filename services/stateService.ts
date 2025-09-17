@@ -1,4 +1,3 @@
-
 import { GameState, Country, Territory, MapData, City } from '../types';
 import * as TopoJSON from 'topojson-client';
 
@@ -336,5 +335,6 @@ export function generateInitialGameState(mapData: MapData): GameState {
     year: 2024,
     events: [],
     chats: {},
+    pendingInvitations: [],
   };
 }

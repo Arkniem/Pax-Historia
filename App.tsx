@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, WorldEvent, GamePhase, MapData, Country, City, DiplomaticChat, ChatMessage } from './types';
 import CountrySelectionScreen from './components/CountrySelectionScreen';
@@ -17,10 +16,7 @@ export default function App() {
   const [mapData, setMapData] = useState<MapData | null>(null);
   const [gamePhase, setGamePhase] = useState<GamePhase>(GamePhase.LOADING);
   const [error, setError] = useState<string | null>(null);
-  const [pendingInvitations, setPendingInvitations] = useState<WorldEvent[]>([]);
-
-  // BUG FIX: Use a ref to get the latest gameState inside async callbacks (setTimeout)
-  // This prevents the turn advancement logic from using stale state.
+  
   const gameStateRef = useRef(gameState);
   useEffect(() => {
     gameStateRef.current = gameState;
@@ -83,7 +79,6 @@ export default function App() {
         const parentCountry = prevState.countries[territory.parentCountryName];
         if (!parentCountry) return prevState;
 
-        // Create a new country for the seceding state
         let hash = 0;
         for (let i = 0; i < selectionName.length; i++) { 
             hash = selectionName.charCodeAt(i) + ((hash << 5) - hash); 
@@ -116,18 +111,15 @@ export default function App() {
   };
   
   const handleNewEvents = (events: WorldEvent[]) => {
-    const chatInvitations = events.filter(e => e.type === 'CHAT_INVITATION');
-    setPendingInvitations(chatInvitations);
-
     setGameState(prevState => {
         if (!prevState) return null;
         
         let newTerritories = { ...prevState.territories };
         let newCountries = { ...prevState.countries };
         let newCities = [...prevState.cities];
+        const chatInvitations = events.filter(e => e.type === 'CHAT_INVITATION');
 
         events.forEach(event => {
-            // Territorial changes
             if (event.type === 'ANNEXATION' && event.countries.length === 2) {
                 const [aggressorName, targetCountryName] = event.countries;
                 
@@ -154,7 +146,7 @@ export default function App() {
                     newCountries[newCountryName] = { 
                         name: newCountryName, 
                         color: stringToColor(newCountryName),
-                        gdp: 5 + (Math.abs(hash) % 45), // New countries start small
+                        gdp: 5 + (Math.abs(hash) % 45),
                         population: 1 + (Math.abs(hash) % 10),
                         stability: 40 + (Math.abs(hash) % 20),
                         resources: [],
@@ -171,51 +163,28 @@ export default function App() {
                 });
             }
 
-            // Economic and military changes
             if (event.economicEffects) {
                 event.economicEffects.forEach(effect => {
                     const countryToUpdate = newCountries[effect.country];
                     if (countryToUpdate) {
                         const updatedCountry = { ...countryToUpdate };
-
-                        if (typeof effect.gdpChange === 'number') {
-                            updatedCountry.gdp = Math.max(1, updatedCountry.gdp + effect.gdpChange);
-                        }
-                        if (typeof effect.populationChange === 'number') {
-                            updatedCountry.population = Math.max(0.1, updatedCountry.population + effect.populationChange);
-                        }
-                        if (typeof effect.stabilityChange === 'number') {
-                            updatedCountry.stability = Math.max(0, Math.min(100, updatedCountry.stability + effect.stabilityChange));
-                        }
-                        if (typeof effect.militaryStrengthChange === 'number') {
-                            updatedCountry.militaryStrength = Math.max(0, updatedCountry.militaryStrength + effect.militaryStrengthChange);
-                        }
-                        if (effect.newResources) {
-                            updatedCountry.resources = [...new Set([...updatedCountry.resources, ...effect.newResources])];
-                        }
-                        
+                        if (typeof effect.gdpChange === 'number') updatedCountry.gdp = Math.max(1, updatedCountry.gdp + effect.gdpChange);
+                        if (typeof effect.populationChange === 'number') updatedCountry.population = Math.max(0.1, updatedCountry.population + effect.populationChange);
+                        if (typeof effect.stabilityChange === 'number') updatedCountry.stability = Math.max(0, Math.min(100, updatedCountry.stability + effect.stabilityChange));
+                        if (typeof effect.militaryStrengthChange === 'number') updatedCountry.militaryStrength = Math.max(0, updatedCountry.militaryStrength + effect.militaryStrengthChange);
+                        if (effect.newResources) updatedCountry.resources = [...new Set([...updatedCountry.resources, ...effect.newResources])];
                         newCountries[effect.country] = updatedCountry;
                     }
                 });
             }
 
-            // City changes
             if (event.type === 'CITY_FOUNDED' && event.newCityName && event.territoryForNewCity && event.newCityCoordinates) {
                 const territoryExists = Object.values(newTerritories).find(t => t.name === event.territoryForNewCity);
                 if(territoryExists) {
-                    const newCity: City = {
-                        id: `${event.newCityName}-${Date.now()}`, // Simple unique ID
-                        name: event.newCityName,
-                        coordinates: event.newCityCoordinates,
-                        territoryId: territoryExists.id,
-                        isCapital: false, // AI founding a capital could be a future feature
-                    };
-                    newCities.push(newCity);
+                    newCities.push({ id: `${event.newCityName}-${Date.now()}`, name: event.newCityName, coordinates: event.newCityCoordinates, territoryId: territoryExists.id, isCapital: false });
                 }
             } else if (event.type === 'CITY_RENAMED' && event.cityName && event.newCityName) {
-                newCities = newCities.map(city => 
-                    city.name === event.cityName ? { ...city, name: event.newCityName, id: `${event.newCityName}-${city.territoryId}` } : city
-                );
+                newCities = newCities.map(city => city.name === event.cityName ? { ...city, name: event.newCityName, id: `${event.newCityName}-${city.territoryId}` } : city);
             } else if (event.type === 'CITY_DESTROYED' && event.cityName) {
                 newCities = newCities.filter(city => city.name !== event.cityName);
             }
@@ -223,6 +192,7 @@ export default function App() {
         
         const correctlyOrderedNewEvents = [...events].reverse();
         const combinedEvents = [...correctlyOrderedNewEvents, ...prevState.events];
+        const newPendingInvitations = [...prevState.pendingInvitations, ...chatInvitations];
 
         return {
             ...prevState,
@@ -231,6 +201,7 @@ export default function App() {
             cities: newCities,
             events: combinedEvents,
             year: prevState.year + 1,
+            pendingInvitations: newPendingInvitations,
         };
     });
   };
@@ -240,19 +211,8 @@ export default function App() {
       if (!prev) return null;
       const currentChat = prev.chats[chatId];
       if (!currentChat) return prev;
-      
       const newPartial = typeof update === 'function' ? update(currentChat) : update;
-
-      return {
-        ...prev,
-        chats: {
-          ...prev.chats,
-          [chatId]: {
-            ...currentChat,
-            ...newPartial
-          }
-        }
-      };
+      return { ...prev, chats: { ...prev.chats, [chatId]: { ...currentChat, ...newPartial } } };
     });
   };
   
@@ -266,28 +226,20 @@ export default function App() {
       topic,
       currentSpeaker: gameState.playerCountryName,
     };
-    
-    setGameState(prev => ({
-      ...prev!,
-      chats: {
-        ...prev!.chats,
-        [chatId]: newChat
-      }
-    }));
+    setGameState(prev => ({ ...prev!, chats: { ...prev!.chats, [chatId]: newChat } }));
     return chatId;
   };
 
   const advanceChatTurn = async (chatId: string, isDelegation: boolean = false) => {
-    const currentGameState = gameStateRef.current; // Use ref for latest state
+    const currentGameState = gameStateRef.current;
     if (!currentGameState || !currentGameState.playerCountryName) return;
     const chat = currentGameState.chats[chatId];
     if (!chat) return;
 
-    updateChat(chatId, { currentSpeaker: null }); // Show "thinking" state
+    updateChat(chatId, { currentSpeaker: null });
 
     try {
         const { nextSpeaker, message } = await getGroupChatTurn(currentGameState, chat, isDelegation);
-        
         const newMessages: ChatMessage[] = message ? [{ sender: nextSpeaker, text: message }] : [];
         
         updateChat(chatId, current => ({
@@ -295,15 +247,11 @@ export default function App() {
             currentSpeaker: nextSpeaker,
         }));
 
-        // If the next speaker is an AI, the conversation should continue.
-        // After a short delay to allow the user to read the message, advance the turn again.
         if (nextSpeaker !== currentGameState.playerCountryName) {
             setTimeout(() => advanceChatTurn(chatId, false), 1500);
         }
-
     } catch (e) {
         console.error("Failed to advance chat turn", e);
-        // On error, give control back to the player
         updateChat(chatId, { currentSpeaker: currentGameState.playerCountryName });
     }
   };
@@ -311,10 +259,7 @@ export default function App() {
   const handleSendMessage = (chatId: string, messageText: string) => {
     if (!gameState || !gameState.playerCountryName) return;
     const newMessage: ChatMessage = { sender: gameState.playerCountryName, text: messageText };
-    updateChat(chatId, current => ({
-      messages: [...current.messages, newMessage]
-    }));
-    // Use a timeout to ensure state update completes before advancing turn
+    updateChat(chatId, current => ({ messages: [...current.messages, newMessage] }));
     setTimeout(() => advanceChatTurn(chatId, false), 100);
   };
   
@@ -323,97 +268,91 @@ export default function App() {
     if (!gameState || !gameState.playerCountryName) return;
     updateChat(chatId, { currentSpeaker: gameState.playerCountryName });
   };
-  
+
+  const handleDeclineInvitation = (invitationToDecline: WorldEvent) => {
+    setGameState(prev => {
+        if (!prev) return null;
+        return {
+            ...prev,
+            pendingInvitations: prev.pendingInvitations.filter(inv => inv !== invitationToDecline)
+        }
+    });
+  };
+
   const handleAcceptInvitation = (invitation: WorldEvent): string => {
-    if (!invitation.chatInitiator || !invitation.chatParticipants) return '';
+    if (!gameState || !invitation.chatInitiator || !invitation.chatParticipants) return '';
     
     const chatId = `chat_${Date.now()}`;
     const newChat: DiplomaticChat = {
       id: chatId,
       participants: invitation.chatParticipants,
       messages: [{ sender: invitation.chatInitiator, text: invitation.description }],
-      topic: invitation.description,
-      currentSpeaker: null,
+      topic: invitation.description, // BUG FIX: Use description for topic
+      currentSpeaker: invitation.chatInitiator === gameState.playerCountryName 
+          ? null // Let AI decide if player was somehow the initiator
+          : invitation.chatInitiator,
     };
 
-    setGameState(prev => ({
-      ...prev!,
-      chats: { ...prev!.chats, [chatId]: newChat }
-    }));
-    setPendingInvitations(prev => prev.filter(inv => inv !== invitation));
-    setTimeout(() => advanceChatTurn(chatId, false), 100);
+    setGameState(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          chats: { ...prev.chats, [chatId]: newChat },
+          pendingInvitations: prev.pendingInvitations.filter(inv => inv !== invitation)
+        };
+    });
+
+    if (newChat.currentSpeaker !== gameState.playerCountryName) {
+        setTimeout(() => advanceChatTurn(chatId, false), 500);
+    }
     return chatId;
-  };
-  
-  const handleDeclineInvitation = (invitation: WorldEvent) => {
-    setPendingInvitations(prev => prev.filter(inv => inv !== invitation));
   };
 
   const handleLoadGame = (loadedGameState: GameState) => {
-    // Basic validation to ensure it's a valid save file
-    if (loadedGameState && loadedGameState.countries && loadedGameState.playerCountryName && loadedGameState.year) {
+    if (loadedGameState && loadedGameState.countries && loadedGameState.year) {
         setGameState(loadedGameState);
         setGamePhase(GamePhase.PLAYING);
-        setPendingInvitations([]); // Clear any pending invitations from the old state
-        console.log("Game loaded successfully!");
     } else {
-        alert("The loaded save file is invalid or corrupted.");
+        alert("Invalid or corrupted save file.");
     }
   };
 
-
-  const renderContent = () => {
-    if (gamePhase === GamePhase.LOADING || !gameState || !mapData) {
-      return (
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center p-4">
-            {error ? (
-              <p className="text-red-400">{error}</p>
-            ) : (
-              <>
-                <svg className="animate-spin h-8 w-8 text-white mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p>Loading World Data...</p>
-              </>
-            )}
-          </div>
+  if (error) {
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-red-900 text-white p-4">
+            <div className="bg-red-700 p-8 rounded-lg shadow-lg text-center">
+                <h1 className="text-2xl font-bold mb-4">A Critical Error Occurred</h1>
+                <p>{error}</p>
+            </div>
         </div>
-      );
-    }
+    );
+  }
+  
+  if (gamePhase === GamePhase.LOADING || !gameState || !mapData) {
+    return <div className="min-h-screen flex items-center justify-center text-white">Loading World Atlas...</div>;
+  }
 
-    if (gamePhase === GamePhase.SELECTION) {
-      return (
-        <CountrySelectionScreen 
-          countries={gameState.countries} 
-          territories={gameState.territories}
-          mapData={mapData}
-          onSelect={handleCountrySelect} 
-        />
-      );
-    }
+  if (gamePhase === GamePhase.SELECTION) {
+    return <CountrySelectionScreen countries={gameState.countries} territories={gameState.territories} mapData={mapData} onSelect={handleCountrySelect} />;
+  }
 
-    if (gamePhase === GamePhase.PLAYING && gameState.playerCountryName) {
-      return (
-        <GameUI 
-          gameState={gameState} 
-          mapData={mapData} 
-          onNewEvents={handleNewEvents}
-          pendingInvitations={pendingInvitations}
-          onCreateChat={handleCreateChat}
-          onAcceptInvitation={handleAcceptInvitation}
-          onDeclineInvitation={handleDeclineInvitation}
-          onSendMessage={handleSendMessage}
-          onDelegateTurn={handleDelegateTurn}
-          onInterrupt={handleInterrupt}
-          onLoadGame={handleLoadGame}
-        />
-      );
-    }
+  if (gamePhase === GamePhase.PLAYING) {
+    return (
+      <GameUI
+        gameState={gameState}
+        mapData={mapData}
+        onNewEvents={handleNewEvents}
+        pendingInvitations={gameState.pendingInvitations}
+        onCreateChat={handleCreateChat}
+        onAcceptInvitation={handleAcceptInvitation}
+        onDeclineInvitation={handleDeclineInvitation}
+        onSendMessage={handleSendMessage}
+        onDelegateTurn={handleDelegateTurn}
+        onInterrupt={handleInterrupt}
+        onLoadGame={handleLoadGame}
+      />
+    );
+  }
 
-    return null;
-  };
-
-  return <div className="min-h-screen bg-gray-900 font-sans">{renderContent()}</div>;
+  return null;
 }

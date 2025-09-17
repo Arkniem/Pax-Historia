@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { GameState, WorldEvent, Country, AdvisorSuggestion, City, DiplomaticChat } from "../types";
 
@@ -116,7 +115,7 @@ export async function simulateWorldEvents(gameState: GameState, playerAction: st
 
         CRITICAL INSTRUCTION: Your simulation must be realistic. A country's economic power (GDP, resources), population, stability, and military strength are paramount. A small, weak nation cannot conquer a superpower. An action's outcome must be proportional to the country's capabilities. If an action is outrageous (e.g., 'Luxembourg annexes China'), generate events describing the diplomatic fallout, economic sanctions, or utter failure.
 
-        NEW DIPLOMACY EVENTS: You can now generate 'CHAT_INVITATION' events. These should be used sparingly and only when there is a strong geopolitical reason (e.g., a border crisis, a shared threat, an opportunity for a major trade deal). Do not create them every year. For this event type, you MUST specify 'chatInitiator' and 'chatParticipants'. This is a powerful tool to create dynamic international relations, alliances, or crises.
+        NEW DIPLOMACY EVENTS: You can generate 'CHAT_INVITATION' events. CRITICAL: These MUST be used sparingly and only for MAJOR diplomatic reasons (e.g., a border crisis, a shared threat, a major trade deal proposal). Do NOT create them every year just for the sake of it. The AI should only initiate diplomacy when it makes narrative and strategic sense. For this event type, you MUST specify 'chatInitiator' and 'chatParticipants'.
 
         NEW DYNAMIC CITY EVENTS: You can now manipulate cities.
         - CITY_FOUNDED: Create a new city. Provide 'newCityName', 'territoryForNewCity', and 'newCityCoordinates'. Do this for colonization, new capitals, etc. The coordinates must be realistic for the territory.
@@ -343,7 +342,7 @@ export async function getAdvisorResponse(
         Your leader has drafted the following message to send:
         "${playerMessage}"
 
-        Your task is to analyze this message and improve it. Your goal is to be effective, not just polite. Consider the geopolitical context, the power dynamics between all nations involved, and the conversation history. The revised message should be strategic, advancing your nation's interests in this multi-party discussion.
+        Your task is to analyze this message and improve it. Your goal is to be effective, not just polite. Consider the geopolitical context, the power dynamics between ALL nations involved, and the conversation history. If this is a group chat, your advice MUST account for how every participant will perceive the message. The revised message should be strategic, advancing your nation's interests in this multi-party discussion.
 
         Provide your response in two parts:
         1.  **suggestion**: The improved message, ready to be sent. It should be written from the perspective of your leader.

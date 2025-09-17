@@ -36,6 +36,7 @@ export interface GameState {
   year: number;
   events: WorldEvent[];
   chats: { [id: string]: DiplomaticChat };
+  pendingInvitations: WorldEvent[];
 }
 
 export interface WorldEvent {
