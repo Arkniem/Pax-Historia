@@ -1,5 +1,6 @@
-import { GameState, Country, Territory, MapData, City } from '../types';
+import { GameState, Country, Territory, MapData, City, CountryArsenal, UnitType } from '../types';
 import * as TopoJSON from 'topojson-client';
+import { geoCentroid } from 'd3-geo';
 
 export const stringToColor = (str: string): string => {
     let hash = 0;
@@ -26,7 +27,7 @@ const simpleHash = (str: string): number => {
 };
 
 const REAL_WORLD_DATA: { [countryName: string]: { gdp: number; population: number; stability: number; militaryStrength: number; militaryTech: number; } } = {
-    // Names should match the `name` property in the world-atlas geojson
+    // Top Tier Powers (G7, BRICS+)
     "United States of America": { gdp: 27360, population: 333, stability: 75, militaryStrength: 100, militaryTech: 10 },
     "China": { gdp: 17730, population: 1425, stability: 70, militaryStrength: 95, militaryTech: 9 },
     "Germany": { gdp: 4450, population: 84, stability: 85, militaryStrength: 60, militaryTech: 8 },
@@ -37,8 +38,10 @@ const REAL_WORLD_DATA: { [countryName: string]: { gdp: number; population: numbe
     "Russia": { gdp: 1860, population: 144, stability: 40, militaryStrength: 92, militaryTech: 9 },
     "Canada": { gdp: 2120, population: 38, stability: 90, militaryStrength: 50, militaryTech: 8 },
     "Brazil": { gdp: 2130, population: 215, stability: 55, militaryStrength: 62, militaryTech: 6 },
-    "Australia": { gdp: 1690, population: 26, stability: 92, militaryStrength: 55, militaryTech: 8 },
     "Italy": { gdp: 2190, population: 59, stability: 70, militaryStrength: 63, militaryTech: 8 },
+    "Australia": { gdp: 1690, population: 26, stability: 92, militaryStrength: 55, militaryTech: 8 },
+
+    // Regional Powers & Significant Nations
     "South Korea": { gdp: 1710, population: 52, stability: 82, militaryStrength: 72, militaryTech: 9 },
     "Iran": { gdp: 413, population: 88, stability: 30, militaryStrength: 75, militaryTech: 6 },
     "Turkey": { gdp: 1150, population: 85, stability: 50, militaryStrength: 78, militaryTech: 7 },
@@ -48,6 +51,193 @@ const REAL_WORLD_DATA: { [countryName: string]: { gdp: number; population: numbe
     "Ukraine": { gdp: 160, population: 43, stability: 25, militaryStrength: 80, militaryTech: 7 },
     "Pakistan": { gdp: 376, population: 236, stability: 45, militaryStrength: 82, militaryTech: 6 },
     "Egypt": { gdp: 378, population: 111, stability: 55, militaryStrength: 79, militaryTech: 7 },
+    "Spain": { gdp: 1580, population: 47, stability: 75, militaryStrength: 54, militaryTech: 8 },
+    "Mexico": { gdp: 1660, population: 127, stability: 60, militaryStrength: 52, militaryTech: 5 },
+    "Indonesia": { gdp: 1390, population: 277, stability: 65, militaryStrength: 64, militaryTech: 6 },
+    "Netherlands": { gdp: 1090, population: 17, stability: 88, militaryStrength: 48, militaryTech: 8 },
+    "Switzerland": { gdp: 938, population: 8, stability: 95, militaryStrength: 40, militaryTech: 8 },
+    "Sweden": { gdp: 648, population: 10, stability: 90, militaryStrength: 49, militaryTech: 8 },
+    "Poland": { gdp: 842, population: 38, stability: 70, militaryStrength: 59, militaryTech: 7 },
+    "Argentina": { gdp: 631, population: 46, stability: 40, militaryStrength: 58, militaryTech: 6 },
+    "Nigeria": { gdp: 506, population: 218, stability: 35, militaryStrength: 57, militaryTech: 5 },
+    "South Africa": { gdp: 405, population: 60, stability: 50, militaryStrength: 56, militaryTech: 6 },
+    "United Arab Emirates": { gdp: 509, population: 10, stability: 80, militaryStrength: 61, militaryTech: 8 },
+    "Thailand": { gdp: 512, population: 71, stability: 65, militaryStrength: 53, militaryTech: 6 },
+    "Vietnam": { gdp: 433, population: 98, stability: 75, militaryStrength: 66, militaryTech: 6 },
+    "Colombia": { gdp: 363, population: 52, stability: 45, militaryStrength: 51, militaryTech: 5 },
+    "Chile": { gdp: 310, population: 19, stability: 70, militaryStrength: 47, militaryTech: 6 },
+    "Greece": { gdp: 223, population: 10, stability: 60, militaryStrength: 55, militaryTech: 7 },
+    "Taiwan": { gdp: 752, population: 23, stability: 85, militaryStrength: 70, militaryTech: 8 },
+
+    // Developing & Smaller Nations (Alphabetical)
+    "Afghanistan": { gdp: 14, population: 41, stability: 10, militaryStrength: 45, militaryTech: 3 },
+    "Albania": { gdp: 21, population: 2.8, stability: 55, militaryStrength: 25, militaryTech: 5 },
+    "Algeria": { gdp: 224, population: 45, stability: 40, militaryStrength: 67, militaryTech: 6 },
+    "Angola": { gdp: 73, population: 35, stability: 30, militaryStrength: 46, militaryTech: 4 },
+    "Armenia": { gdp: 19, population: 2.9, stability: 40, militaryStrength: 38, militaryTech: 5 },
+    "Austria": { gdp: 520, population: 9, stability: 88, militaryStrength: 35, militaryTech: 7 },
+    "Azerbaijan": { gdp: 77, population: 10, stability: 50, militaryStrength: 58, militaryTech: 6 },
+    "The Bahamas": { gdp: 13, population: 0.4, stability: 70, militaryStrength: 5, militaryTech: 4 },
+    "Bahrain": { gdp: 44, population: 1.5, stability: 65, militaryStrength: 30, militaryTech: 7 },
+    "Bangladesh": { gdp: 446, population: 169, stability: 55, militaryStrength: 48, militaryTech: 4 },
+    "Belarus": { gdp: 71, population: 9.3, stability: 30, militaryStrength: 60, militaryTech: 6 },
+    "Belgium": { gdp: 624, population: 11.6, stability: 82, militaryStrength: 42, militaryTech: 8 },
+    "Belize": { gdp: 2.8, population: 0.4, stability: 60, militaryStrength: 4, militaryTech: 4 },
+    "Benin": { gdp: 18, population: 13, stability: 50, militaryStrength: 15, militaryTech: 3 },
+    "Bhutan": { gdp: 2.8, population: 0.8, stability: 75, militaryStrength: 8, militaryTech: 3 },
+    "Bolivia": { gdp: 44, population: 12, stability: 45, militaryStrength: 28, militaryTech: 4 },
+    "Bosnia and Herz.": { gdp: 26, population: 3.2, stability: 40, militaryStrength: 24, militaryTech: 5 },
+    "Botswana": { gdp: 20, population: 2.6, stability: 70, militaryStrength: 18, militaryTech: 4 },
+    "Brunei": { gdp: 15, population: 0.4, stability: 80, militaryStrength: 12, militaryTech: 6 },
+    "Bulgaria": { gdp: 98, population: 6.5, stability: 60, militaryStrength: 40, militaryTech: 6 },
+    "Burkina Faso": { gdp: 20, population: 22, stability: 15, militaryStrength: 22, militaryTech: 3 },
+    "Burundi": { gdp: 3.3, population: 12, stability: 20, militaryStrength: 16, militaryTech: 2 },
+    "Cambodia": { gdp: 30, population: 16, stability: 55, militaryStrength: 32, militaryTech: 3 },
+    "Cameroon": { gdp: 44, population: 27, stability: 35, militaryStrength: 29, militaryTech: 3 },
+    "Central African Rep.": { gdp: 2.4, population: 5.5, stability: 10, militaryStrength: 10, militaryTech: 2 },
+    "Chad": { gdp: 12, population: 17, stability: 20, militaryStrength: 33, militaryTech: 3 },
+    "Congo": { gdp: 15, population: 5.8, stability: 40, militaryStrength: 20, militaryTech: 3 },
+    "Costa Rica": { gdp: 75, population: 5.2, stability: 80, militaryStrength: 2, militaryTech: 4 },
+    "Côte d'Ivoire": { gdp: 77, population: 28, stability: 45, militaryStrength: 26, militaryTech: 3 },
+    "Croatia": { gdp: 79, population: 3.9, stability: 65, militaryStrength: 39, militaryTech: 6 },
+    "Cuba": { gdp: 107, population: 11, stability: 35, militaryStrength: 43, militaryTech: 5 },
+    "Cyprus": { gdp: 32, population: 1.2, stability: 75, militaryStrength: 20, militaryTech: 6 },
+    "Czechia": { gdp: 331, population: 10.5, stability: 80, militaryStrength: 41, militaryTech: 7 },
+    "Dem. Rep. Congo": { gdp: 64, population: 99, stability: 15, militaryStrength: 37, militaryTech: 2 },
+    "Denmark": { gdp: 421, population: 5.9, stability: 92, militaryStrength: 44, militaryTech: 8 },
+    "Djibouti": { gdp: 4, population: 1.1, stability: 50, militaryStrength: 10, militaryTech: 4 },
+    "Dominican Rep.": { gdp: 112, population: 11, stability: 60, militaryStrength: 23, militaryTech: 4 },
+    "Ecuador": { gdp: 115, population: 18, stability: 40, militaryStrength: 36, militaryTech: 4 },
+    "El Salvador": { gdp: 33, population: 6.3, stability: 50, militaryStrength: 21, militaryTech: 4 },
+    "Equatorial Guinea": { gdp: 11, population: 1.6, stability: 30, militaryStrength: 8, militaryTech: 3 },
+    "Eritrea": { gdp: 2.1, population: 3.6, stability: 15, militaryStrength: 40, militaryTech: 3 },
+    "Estonia": { gdp: 41, population: 1.3, stability: 80, militaryStrength: 28, militaryTech: 6 },
+    "Ethiopia": { gdp: 156, population: 123, stability: 25, militaryStrength: 68, militaryTech: 4 },
+    "Fiji": { gdp: 5, population: 0.9, stability: 65, militaryStrength: 7, militaryTech: 3 },
+    "Finland": { gdp: 304, population: 5.5, stability: 93, militaryStrength: 52, militaryTech: 8 },
+    "Gabon": { gdp: 21, population: 2.3, stability: 45, militaryStrength: 14, militaryTech: 3 },
+    "Georgia": { gdp: 25, population: 3.7, stability: 50, militaryStrength: 34, militaryTech: 5 },
+    "Ghana": { gdp: 73, population: 33, stability: 60, militaryStrength: 25, militaryTech: 4 },
+    "Guatemala": { gdp: 95, population: 18, stability: 40, militaryStrength: 27, militaryTech: 4 },
+    "Guinea": { gdp: 21, population: 13, stability: 30, militaryStrength: 19, militaryTech: 3 },
+    "Guinea-Bissau": { gdp: 1.7, population: 2.1, stability: 25, militaryStrength: 9, militaryTech: 2 },
+    "Guyana": { gdp: 15, population: 0.8, stability: 55, militaryStrength: 6, militaryTech: 3 },
+    "Haiti": { gdp: 19, population: 11, stability: 5, militaryStrength: 3, militaryTech: 2 },
+    "Honduras": { gdp: 32, population: 10, stability: 35, militaryStrength: 18, militaryTech: 3 },
+    "Hungary": { gdp: 216, population: 9.6, stability: 65, militaryStrength: 38, militaryTech: 6 },
+    "Iceland": { gdp: 28, population: 0.4, stability: 95, militaryStrength: 3, militaryTech: 5 },
+    "Iraq": { gdp: 267, population: 44, stability: 20, militaryStrength: 63, militaryTech: 5 },
+    "Ireland": { gdp: 594, population: 5.1, stability: 85, militaryStrength: 15, militaryTech: 7 },
+    "Jamaica": { gdp: 17, population: 2.8, stability: 55, militaryStrength: 9, militaryTech: 4 },
+    "Jordan": { gdp: 50, population: 11, stability: 50, militaryStrength: 50, militaryTech: 6 },
+    "Kazakhstan": { gdp: 259, population: 19, stability: 65, militaryStrength: 53, militaryTech: 6 },
+    "Kenya": { gdp: 114, population: 54, stability: 45, militaryStrength: 39, militaryTech: 4 },
+    "Kosovo": { gdp: 10, population: 1.8, stability: 35, militaryStrength: 15, militaryTech: 4 },
+    "Kuwait": { gdp: 164, population: 4.3, stability: 70, militaryStrength: 45, militaryTech: 7 },
+    "Kyrgyzstan": { gdp: 11, population: 6.9, stability: 40, militaryStrength: 26, militaryTech: 4 },
+    "Laos": { gdp: 15, population: 7.5, stability: 60, militaryStrength: 29, militaryTech: 3 },
+    "Latvia": { gdp: 44, population: 1.8, stability: 75, militaryStrength: 27, militaryTech: 6 },
+    "Lebanon": { gdp: 23, population: 5.5, stability: 10, militaryStrength: 31, militaryTech: 5 },
+    "Lesotho": { gdp: 2.2, population: 2.3, stability: 40, militaryStrength: 5, militaryTech: 2 },
+    "Liberia": { gdp: 4, population: 5.3, stability: 30, militaryStrength: 7, militaryTech: 2 },
+    "Libya": { gdp: 40, population: 6.8, stability: 10, militaryStrength: 35, militaryTech: 4 },
+    "Lithuania": { gdp: 78, population: 2.7, stability: 78, militaryStrength: 30, militaryTech: 6 },
+    "Luxembourg": { gdp: 89, population: 0.6, stability: 94, militaryStrength: 8, militaryTech: 7 },
+    "Madagascar": { gdp: 16, population: 29, stability: 35, militaryStrength: 17, militaryTech: 2 },
+    "Malawi": { gdp: 6.4, population: 20, stability: 40, militaryStrength: 12, militaryTech: 2 },
+    "Malaysia": { gdp: 434, population: 33, stability: 70, militaryStrength: 49, militaryTech: 6 },
+    "Mali": { gdp: 19, population: 22, stability: 15, militaryStrength: 23, militaryTech: 3 },
+    "Mauritania": { gdp: 10, population: 4.7, stability: 35, militaryStrength: 18, militaryTech: 3 },
+    "Moldova": { gdp: 15, population: 2.5, stability: 45, militaryStrength: 16, militaryTech: 4 },
+    "Mongolia": { gdp: 17, population: 3.4, stability: 65, militaryStrength: 24, militaryTech: 4 },
+    "Montenegro": { gdp: 7, population: 0.6, stability: 60, militaryStrength: 14, militaryTech: 5 },
+    "Morocco": { gdp: 138, population: 37, stability: 60, militaryStrength: 60, militaryTech: 6 },
+    "Mozambique": { gdp: 18, population: 33, stability: 30, militaryStrength: 20, militaryTech: 3 },
+    "Myanmar": { gdp: 62, population: 54, stability: 10, militaryStrength: 55, militaryTech: 4 },
+    "Namibia": { gdp: 13, population: 2.5, stability: 65, militaryStrength: 13, militaryTech: 3 },
+    "Nepal": { gdp: 41, population: 30, stability: 50, militaryStrength: 25, militaryTech: 3 },
+    "New Zealand": { gdp: 249, population: 5.1, stability: 94, militaryStrength: 28, militaryTech: 7 },
+    "Nicaragua": { gdp: 16, population: 6.9, stability: 30, militaryStrength: 19, militaryTech: 3 },
+    "Niger": { gdp: 15, population: 26, stability: 20, militaryStrength: 21, militaryTech: 3 },
+    "North Macedonia": { gdp: 14, population: 2.1, stability: 50, militaryStrength: 22, militaryTech: 5 },
+    "Norway": { gdp: 505, population: 5.4, stability: 96, militaryStrength: 46, militaryTech: 8 },
+    "Oman": { gdp: 108, population: 4.6, stability: 75, militaryStrength: 47, militaryTech: 7 },
+    "Panama": { gdp: 76, population: 4.4, stability: 70, militaryStrength: 10, militaryTech: 4 },
+    "Papua New Guinea": { gdp: 31, population: 10, stability: 35, militaryStrength: 11, militaryTech: 2 },
+    "Paraguay": { gdp: 43, population: 6.8, stability: 55, militaryStrength: 20, militaryTech: 4 },
+    "Peru": { gdp: 264, population: 34, stability: 40, militaryStrength: 42, militaryTech: 5 },
+    "Philippines": { gdp: 435, population: 115, stability: 55, militaryStrength: 50, militaryTech: 5 },
+    "Portugal": { gdp: 277, population: 10, stability: 80, militaryStrength: 43, militaryTech: 7 },
+    "Qatar": { gdp: 235, population: 2.7, stability: 85, militaryStrength: 51, militaryTech: 8 },
+    "Romania": { gdp: 345, population: 19, stability: 65, militaryStrength: 48, militaryTech: 6 },
+    "Rwanda": { gdp: 13, population: 13, stability: 65, militaryStrength: 23, militaryTech: 3 },
+    "S. Sudan": { gdp: 5, population: 11, stability: 5, militaryStrength: 15, militaryTech: 2 },
+    "Senegal": { gdp: 31, population: 17, stability: 58, militaryStrength: 22, militaryTech: 3 },
+    "Serbia": { gdp: 74, population: 7.1, stability: 55, militaryStrength: 46, militaryTech: 6 },
+    "Sierra Leone": { gdp: 4, population: 8.6, stability: 35, militaryStrength: 8, militaryTech: 2 },
+    "Singapore": { gdp: 501, population: 5.6, stability: 95, militaryStrength: 54, militaryTech: 9 },
+    "Slovakia": { gdp: 130, population: 5.4, stability: 75, militaryStrength: 32, militaryTech: 6 },
+    "Slovenia": { gdp: 70, population: 2.1, stability: 82, militaryStrength: 26, militaryTech: 6 },
+    "Solomon Is.": { gdp: 1.6, population: 0.7, stability: 45, militaryStrength: 2, militaryTech: 1 },
+    "Somalia": { gdp: 10, population: 17, stability: 5, militaryStrength: 14, militaryTech: 2 },
+    "Sri Lanka": { gdp: 74, population: 22, stability: 30, militaryStrength: 36, militaryTech: 4 },
+    "Sudan": { gdp: 30, population: 47, stability: 10, militaryStrength: 44, militaryTech: 4 },
+    "Suriname": { gdp: 3.6, population: 0.6, stability: 50, militaryStrength: 4, militaryTech: 3 },
+    "Syria": { gdp: 12, population: 22, stability: 5, militaryStrength: 56, militaryTech: 5 },
+    "Tajikistan": { gdp: 11, population: 9.9, stability: 45, militaryStrength: 23, militaryTech: 4 },
+    "Tanzania": { gdp: 76, population: 65, stability: 55, militaryStrength: 34, militaryTech: 3 },
+    "The Gambia": { gdp: 2.3, population: 2.7, stability: 48, militaryStrength: 5, militaryTech: 2 },
+    "Timor-Leste": { gdp: 2, population: 1.3, stability: 40, militaryStrength: 3, militaryTech: 2 },
+    "Togo": { gdp: 9, population: 8.8, stability: 45, militaryStrength: 13, militaryTech: 2 },
+    "Trinidad and Tobago": { gdp: 28, population: 1.5, stability: 60, militaryStrength: 10, militaryTech: 4 },
+    "Tunisia": { gdp: 46, population: 12, stability: 40, militaryStrength: 37, militaryTech: 5 },
+    "Turkmenistan": { gdp: 56, population: 6.4, stability: 40, militaryStrength: 35, militaryTech: 5 },
+    "Uganda": { gdp: 49, population: 47, stability: 40, militaryStrength: 30, militaryTech: 3 },
+    "Uruguay": { gdp: 74, population: 3.4, stability: 80, militaryStrength: 19, militaryTech: 5 },
+    "Uzbekistan": { gdp: 90, population: 36, stability: 60, militaryStrength: 49, militaryTech: 5 },
+    "Vanuatu": { gdp: 1, population: 0.3, stability: 60, militaryStrength: 1, militaryTech: 1 },
+    "Venezuela": { gdp: 90, population: 28, stability: 15, militaryStrength: 57, militaryTech: 5 },
+    "Yemen": { gdp: 21, population: 33, stability: 5, militaryStrength: 41, militaryTech: 3 },
+    "Zambia": { gdp: 29, population: 20, stability: 45, militaryStrength: 21, militaryTech: 3 },
+    "Zimbabwe": { gdp: 27, population: 16, stability: 25, militaryStrength: 26, militaryTech: 3 },
+};
+
+const INITIAL_ARSENAL_DATA: { [countryName: string]: Partial<CountryArsenal> } = {
+  "United States of America": {
+    [UnitType.NAVY]: {
+      maxUnits: 11,
+      unitNames: [
+        "USS Gerald R. Ford Strike Group", "USS Nimitz Strike Group", "USS Dwight D. Eisenhower Strike Group", "USS Carl Vinson Strike Group", "USS Theodore Roosevelt Strike Group", "USS Abraham Lincoln Strike Group", "USS George Washington Strike Group", "USS John C. Stennis Strike Group", "USS Harry S. Truman Strike Group", "USS Ronald Reagan Strike Group", "USS George H.W. Bush Strike Group",
+      ]
+    },
+    [UnitType.ARMY]: { maxUnits: 20, unitNames: [] },
+    [UnitType.AIR_FORCE]: { maxUnits: 25, unitNames: [] },
+  },
+  "China": {
+    [UnitType.NAVY]: { maxUnits: 4, unitNames: ["Liaoning Carrier Strike Group", "Shandong Carrier Strike Group", "Fujian Carrier Strike Group"] },
+    [UnitType.ARMY]: { maxUnits: 25, unitNames: [] },
+    [UnitType.AIR_FORCE]: { maxUnits: 20, unitNames: [] },
+  },
+  "Russia": {
+    [UnitType.NAVY]: { maxUnits: 2, unitNames: ["Admiral Kuznetsov Carrier Group"] },
+    [UnitType.ARMY]: { maxUnits: 18, unitNames: [] },
+    [UnitType.AIR_FORCE]: { maxUnits: 15, unitNames: [] },
+  },
+  "United Kingdom": {
+    [UnitType.NAVY]: { maxUnits: 2, unitNames: ["HMS Queen Elizabeth Carrier Strike Group", "HMS Prince of Wales Carrier Strike Group"] },
+    [UnitType.ARMY]: { maxUnits: 8, unitNames: [] },
+    [UnitType.AIR_FORCE]: { maxUnits: 10, unitNames: [] },
+  },
+  "France": {
+    [UnitType.NAVY]: { maxUnits: 2, unitNames: ["Charles de Gaulle Carrier Strike Group"] },
+    [UnitType.ARMY]: { maxUnits: 9, unitNames: [] },
+    [UnitType.AIR_FORCE]: { maxUnits: 10, unitNames: [] },
+  },
+  "India": {
+    [UnitType.NAVY]: { maxUnits: 3, unitNames: ["INS Vikramaditya Carrier Battle Group", "INS Vikrant Carrier Battle Group"] },
+    [UnitType.ARMY]: { maxUnits: 15, unitNames: [] },
+    [UnitType.AIR_FORCE]: { maxUnits: 12, unitNames: [] },
+  },
 };
 
 const INITIAL_CITIES: Omit<City, 'id'>[] = [
@@ -253,14 +443,52 @@ const INITIAL_CITIES: Omit<City, 'id'>[] = [
     { name: "Port Vila", coordinates: [168.3219, -17.7344], territoryId: "Vanuatu", isCapital: true },
 ];
 
+function generateInitialArsenal(countries: { [name: string]: Country }): { [countryName: string]: CountryArsenal } {
+    const arsenal: { [countryName: string]: CountryArsenal } = {};
+
+    Object.values(countries).forEach(country => {
+        const countryData = INITIAL_ARSENAL_DATA[country.name] || {};
+        
+        // Tier based on military strength
+        let tier;
+        if (country.militaryStrength >= 80) tier = 1; // Superpower
+        else if (country.militaryStrength >= 65) tier = 2; // Major Power
+        else if (country.militaryStrength >= 40) tier = 3; // Regional Power
+        else if (country.militaryStrength >= 20) tier = 4; // Minor Power
+        else tier = 5; // Small Nation
+
+        const getTieredMax = (base: { t1: number; t2: number; t3: number; t4: number; t5: number; }) => {
+            if (tier === 1) return base.t1;
+            if (tier === 2) return base.t2;
+            if (tier === 3) return base.t3;
+            if (tier === 4) return base.t4;
+            return base.t5;
+        };
+
+        arsenal[country.name] = {
+            [UnitType.NAVY]: {
+                maxUnits: countryData[UnitType.NAVY]?.maxUnits ?? getTieredMax({ t1: 8, t2: 5, t3: 3, t4: 2, t5: 1 }),
+                unitNames: countryData[UnitType.NAVY]?.unitNames ?? [],
+            },
+            [UnitType.ARMY]: {
+                maxUnits: countryData[UnitType.ARMY]?.maxUnits ?? getTieredMax({ t1: 20, t2: 15, t3: 10, t4: 5, t5: 3 }),
+                unitNames: countryData[UnitType.ARMY]?.unitNames ?? [],
+            },
+            [UnitType.AIR_FORCE]: {
+                maxUnits: countryData[UnitType.AIR_FORCE]?.maxUnits ?? getTieredMax({ t1: 22, t2: 16, t3: 11, t4: 6, t5: 2 }),
+                unitNames: countryData[UnitType.AIR_FORCE]?.unitNames ?? [],
+            },
+        };
+    });
+
+    return arsenal;
+}
+
+
 export function generateInitialGameState(mapData: MapData): GameState {
   const territories: { [id: string]: Territory } = {};
   const countries: { [name: string]: Country } = {};
 
-  // FIX: Cast the result of TopoJSON.feature to `any` to access the `features` property.
-  // The `feature` function returns a union type, but we know from the data structure
-  // that it will be a FeatureCollection.
-  // FIX: Corrected variable name from 'map' to 'mapData'.
   const worldFeatures = (TopoJSON.feature(mapData.world, mapData.world.objects.countries as any) as any).features;
   const usFeatures = (TopoJSON.feature(mapData.us, mapData.us.objects.states as any) as any).features;
   
@@ -273,6 +501,7 @@ export function generateInitialGameState(mapData: MapData): GameState {
     let territoryId: string;
     let territoryName: string;
     let parentCountryName: string;
+    const centroid = geoCentroid(geo);
 
     if (type === 'us') {
       territoryId = `USA-${geo.id}`;
@@ -290,7 +519,8 @@ export function generateInitialGameState(mapData: MapData): GameState {
             id: territoryId,
             name: territoryName,
             parentCountryName: 'Unclaimed',
-            owner: 'Unclaimed'
+            owner: 'Unclaimed',
+            centroid: centroid as [number, number],
         };
         // Skip country creation for Antarctica
         return;
@@ -300,7 +530,8 @@ export function generateInitialGameState(mapData: MapData): GameState {
       id: territoryId,
       name: territoryName,
       parentCountryName: parentCountryName,
-      owner: parentCountryName
+      owner: parentCountryName,
+      centroid: centroid as [number, number],
     };
 
     // If we haven't created this country yet, create it.
@@ -326,6 +557,8 @@ export function generateInitialGameState(mapData: MapData): GameState {
     ...city,
     id: `${city.name}-${city.territoryId}`, // Create a unique ID
   }));
+  
+  const arsenal = generateInitialArsenal(countries);
 
   return {
     territories,
@@ -336,5 +569,7 @@ export function generateInitialGameState(mapData: MapData): GameState {
     events: [],
     chats: {},
     pendingInvitations: [],
+    militaryUnits: {},
+    arsenal,
   };
 }

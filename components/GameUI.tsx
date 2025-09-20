@@ -1,17 +1,19 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, WorldEvent, Country, AdvisorSuggestion, MapData, DiplomaticChat } from '../types';
+import { GameState, WorldEvent, Country, MapData, DiplomaticChat, UnitType, MilitaryUnit, Toast } from '../types';
 import WorldMap from './WorldMap';
 import EventLog from './EventLog';
 import DiplomacyModal from './DiplomacyModal';
 import Header from './Header';
 import CountryStatsPanel from './CountryStatsPanel';
-import { simulateWorldEvents, getGeneralAdvice, getAdvisorResponse } from '../services/geminiService';
+import DeploymentModal from './DeploymentModal';
+import MilitaryUnitPanel from './MilitaryUnitPanel';
+import { getGeneralAdvice, getAdvisorResponse, simulateWorldEvents } from '../services/geminiService';
 
 interface GameUIProps {
   gameState: GameState;
   mapData: MapData;
-  onNewEvents: (events: WorldEvent[]) => void;
+  toasts: Toast[];
+  onNewEvents: (events: WorldEvent[]) => Promise<void>;
   pendingInvitations: WorldEvent[];
   onCreateChat: (participants: string[], topic: string) => string;
   onAcceptInvitation: (invitation: WorldEvent) => string;
@@ -20,6 +22,8 @@ interface GameUIProps {
   onDelegateTurn: (chatId: string) => void;
   onInterrupt: (chatId: string) => void;
   onLoadGame: (loadedGameState: GameState) => void;
+  onDeployUnit: (locationDescription: string, deploymentBrief: string) => Promise<void>;
+  onUnitOrder: (unitId: string, order: string) => Promise<void>;
 }
 
 type DiplomacyView = 'closed' | 'lobby' | 'chat' | 'invitations';
@@ -106,9 +110,23 @@ const AdvisorPanel = ({ onAskAdvice, isAdvising, advice }: { onAskAdvice: (quest
     );
 };
 
+const ToastContainer = ({ toasts }: { toasts: Toast[] }) => {
+    return (
+        <div className="fixed top-5 right-5 z-[100] w-full max-w-xs space-y-3">
+            {toasts.map(toast => (
+                <div key={toast.id} className={`flex items-center justify-between p-4 rounded-lg shadow-lg text-white animate-fade-in-right ${toast.type === 'success' ? 'bg-green-600' : toast.type === 'error' ? 'bg-red-600' : 'bg-blue-600'}`}>
+                    <span>{toast.message}</span>
+                </div>
+            ))}
+        </div>
+    )
+};
+
+
 export default function GameUI({ 
   gameState, 
-  mapData, 
+  mapData,
+  toasts, 
   onNewEvents,
   pendingInvitations,
   onCreateChat,
@@ -118,26 +136,44 @@ export default function GameUI({
   onDelegateTurn,
   onInterrupt,
   onLoadGame,
+  onDeployUnit,
+  onUnitOrder,
 }: GameUIProps) {
   const [isSimulating, setIsSimulating] = useState(false);
   const [diplomacyView, setDiplomacyView] = useState<DiplomacyView>('closed');
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [isAdvisorModalOpen, setIsAdvisorModalOpen] = useState(false);
+  const [isDeploymentModalOpen, setIsDeploymentModalOpen] = useState(false);
   const [isEventsPanelOpen, setIsEventsPanelOpen] = useState(false);
   const [selectedCountryForStats, setSelectedCountryForStats] = useState<Country | null>(null);
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const [isGameMenuOpen, setIsGameMenuOpen] = useState(false);
   
   const [isAdvising, setIsAdvising] = useState(false);
   const [generalAdvice, setGeneralAdvice] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const gameMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (pendingInvitations.length > 0 && !isSimulating) {
+    if (pendingInvitations.length > 0 && !isSimulating && diplomacyView === 'closed') {
         setDiplomacyView('invitations');
     }
-  }, [pendingInvitations, isSimulating]);
+  }, [pendingInvitations, isSimulating, diplomacyView]);
+
+  // Close game menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (gameMenuRef.current && !gameMenuRef.current.contains(event.target as Node)) {
+            setIsGameMenuOpen(false);
+        }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleSimulate = async (action: string) => {
     setIsSimulating(true);
@@ -150,7 +186,7 @@ export default function GameUI({
 
     try {
       const events = await simulateWorldEvents(gameState, action, chatSummary);
-      onNewEvents(events);
+      await onNewEvents(events);
     } catch (error) {
       console.error("Simulation failed:", error);
     } finally {
@@ -213,7 +249,16 @@ export default function GameUI({
     }
   };
 
+  const handleDeclineAndClose = (invitation: WorldEvent) => {
+    onDeclineInvitation(invitation);
+    // If this was the last invitation, close the diplomacy view.
+    if (pendingInvitations.length <= 1) {
+        setDiplomacyView('closed');
+    }
+  };
+
   const handleTerritoryStatSelect = (territoryId: string) => {
+    setSelectedUnitId(null); // Deselect any unit when a territory is clicked
     const territory = gameState.territories[territoryId];
     if (territory && territory.owner !== 'Unclaimed') {
         const ownerCountry = gameState.countries[territory.owner];
@@ -225,6 +270,22 @@ export default function GameUI({
     } else {
         setSelectedCountryForStats(null);
     }
+  };
+
+  const handleUnitSelect = (unitId: string) => {
+    setSelectedCountryForStats(null); // Deselect any country when a unit is clicked
+    if (selectedUnitId === unitId) {
+        setSelectedUnitId(null);
+    } else {
+        setSelectedUnitId(unitId);
+    }
+  };
+  
+  const handleDeploy = async (locationDescription: string, deploymentBrief: string) => {
+    setIsDeploymentModalOpen(false);
+    setIsSimulating(true); // Use isSimulating to show a loading state
+    await onDeployUnit(locationDescription, deploymentBrief);
+    setIsSimulating(false);
   };
 
   const handleSaveGame = () => {
@@ -254,35 +315,44 @@ export default function GameUI({
         onLoadGame(loadedState);
       } catch (error) {
         console.error("Failed to load game:", error);
-        alert("Failed to load save file. It may be corrupted or in an invalid format.");
       }
     };
     reader.readAsText(file);
-    // Reset the input value to allow loading the same file again if needed
     event.target.value = '';
   };
 
   const playerCountry = gameState.countries[gameState.playerCountryName!];
   const activeChat = activeChatId ? gameState.chats[activeChatId] : null;
+  const selectedUnit = selectedUnitId ? gameState.militaryUnits[selectedUnitId] : null;
 
   return (
     <div className="flex flex-col h-screen bg-gray-800">
       <Header playerCountry={playerCountry} />
+      <ToastContainer toasts={toasts} />
       <div className="flex-1 flex overflow-hidden">
         <main className="flex-1 overflow-hidden relative">
           <WorldMap
             territories={gameState.territories}
             countries={gameState.countries}
             cities={gameState.cities}
+            militaryUnits={gameState.militaryUnits}
+            selectedUnit={selectedUnit}
             mapData={mapData}
             onTerritoryClick={handleTerritoryStatSelect}
+            onUnitClick={handleUnitSelect}
             playerCountryName={gameState.playerCountryName!}
           />
           <CountryStatsPanel 
             country={selectedCountryForStats} 
             onClose={() => setSelectedCountryForStats(null)} 
           />
-          <div className="absolute bottom-4 left-4 flex space-x-2 z-20">
+          <MilitaryUnitPanel 
+            unit={selectedUnit}
+            onClose={() => setSelectedUnitId(null)}
+            onUnitOrder={onUnitOrder}
+            playerCountryName={gameState.playerCountryName}
+          />
+          <div className="absolute bottom-4 left-4 flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 z-20">
               <button 
                   onClick={() => setIsActionModalOpen(true)}
                   className="bg-gray-900 text-2xl text-white font-bold p-3 rounded-full shadow-lg hover:bg-gray-700 transition"
@@ -298,11 +368,19 @@ export default function GameUI({
                   💡
               </button>
               <button 
-                  onClick={() => setDiplomacyView('lobby')}
-                  className="bg-gray-900 text-2xl text-white font-bold p-3 rounded-full shadow-lg hover:bg-gray-700 transition"
+                  onClick={() => setDiplomacyView(pendingInvitations.length > 0 ? 'invitations' : 'lobby')}
+                  className="bg-gray-900 text-2xl text-white font-bold p-3 rounded-full shadow-lg hover:bg-gray-700 transition relative"
                   title="Diplomacy"
               >
                   🤝
+                  {pendingInvitations.length > 0 && <span className="absolute top-0 right-0 block h-3 w-3 rounded-full bg-red-500 ring-2 ring-gray-900"></span>}
+              </button>
+               <button 
+                  onClick={() => setIsDeploymentModalOpen(true)}
+                  className="bg-gray-900 text-2xl text-white font-bold p-3 rounded-full shadow-lg hover:bg-gray-700 transition"
+                  title="Deploy Unit"
+              >
+                  🎖️
               </button>
               <button 
                   onClick={() => setIsEventsPanelOpen(true)}
@@ -311,8 +389,8 @@ export default function GameUI({
               >
                   🌍
               </button>
-              <div className="border-l-2 border-gray-700 mx-1"></div>
-               <div className="relative flex items-center">
+              <div className="hidden md:block border-l-2 border-gray-700 mx-1"></div>
+               <div ref={gameMenuRef} className="relative flex items-center">
                   <button 
                       onClick={() => setIsGameMenuOpen(prev => !prev)}
                       className="bg-gray-900 text-2xl text-white font-bold p-3 rounded-full shadow-lg hover:bg-gray-700 transition"
@@ -321,7 +399,7 @@ export default function GameUI({
                       ⚙️
                   </button>
                   {isGameMenuOpen && (
-                      <div className="absolute bottom-0 left-full ml-2 flex space-x-2 animate-fade-in-menu">
+                      <div className="absolute bottom-0 left-full ml-2 flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 animate-fade-in-menu">
                            <button 
                               onClick={handleSaveGame}
                               className="bg-gray-900 text-2xl text-white font-bold p-3 rounded-full shadow-lg hover:bg-gray-700 transition"
@@ -361,6 +439,14 @@ export default function GameUI({
       <Modal isOpen={isAdvisorModalOpen} onClose={() => setIsAdvisorModalOpen(false)} title="Strategic Advisor">
           <AdvisorPanel onAskAdvice={handleAskGeneralAdvice} isAdvising={isAdvising} advice={generalAdvice} />
       </Modal>
+      
+      <DeploymentModal 
+        isOpen={isDeploymentModalOpen}
+        onClose={() => setIsDeploymentModalOpen(false)}
+        onDeploy={handleDeploy}
+        gameState={gameState}
+        isDeploying={isSimulating}
+      />
 
       {(diplomacyView !== 'closed') && (
         <DiplomacyModal
@@ -373,7 +459,7 @@ export default function GameUI({
           onOpenChat={handleOpenChat}
           onStartNewChat={handleStartNewChat}
           onAcceptInvitation={handleAcceptAndOpenChat}
-          onDeclineInvitation={onDeclineInvitation}
+          onDeclineInvitation={handleDeclineAndClose}
           onSendMessage={onSendMessage}
           onDelegateTurn={onDelegateTurn}
           onInterrupt={onInterrupt}
@@ -388,6 +474,19 @@ export default function GameUI({
         }
         .animate-fade-in-menu {
             animation: fade-in-menu 0.2s ease-out forwards;
+        }
+        @keyframes fade-in-right {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        .animate-fade-in-right {
+            animation: fade-in-right 0.3s ease-out forwards;
         }
       `}</style>
     </div>

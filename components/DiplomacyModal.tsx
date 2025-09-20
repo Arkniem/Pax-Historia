@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { GameState, DiplomaticChat, AdvisorSuggestion, WorldEvent } from '../types';
 
@@ -200,9 +199,10 @@ interface InvitationViewProps {
     invitations: WorldEvent[];
     onAccept: (invitation: WorldEvent) => void;
     onDecline: (invitation: WorldEvent) => void;
+    onClose: () => void;
 }
 
-const InvitationView = ({ invitations, onAccept, onDecline }: InvitationViewProps) => {
+const InvitationView = ({ invitations, onAccept, onDecline, onClose }: InvitationViewProps) => {
     const invitation = invitations[0]; // Show one at a time
     if (!invitation) return null;
 
@@ -210,6 +210,7 @@ const InvitationView = ({ invitations, onAccept, onDecline }: InvitationViewProp
         <>
              <header className="p-4 border-b border-gray-700 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-white">Diplomatic Invitation</h2>
+                <button onClick={onClose} className="text-gray-400 hover:text-white transition text-2xl leading-none">&times;</button>
             </header>
             <div className="p-6">
                 <p className="text-gray-300 mb-2">You have received an invitation from <span className="font-semibold text-white">{invitation.chatInitiator}</span>.</p>
@@ -236,7 +237,7 @@ export default function DiplomacyModal({ view, isOpen, onClose, gameState, activ
     const renderView = () => {
         switch (view) {
             case 'invitations':
-                return <InvitationView invitations={pendingInvitations} onAccept={handlers.onAcceptInvitation} onDecline={handlers.onDeclineInvitation} />;
+                return <InvitationView invitations={pendingInvitations} onAccept={handlers.onAcceptInvitation} onDecline={handlers.onDeclineInvitation} onClose={onClose} />;
             case 'lobby':
                 return <ChatLobby gameState={gameState} onOpenChat={handlers.onOpenChat} onStartNewChat={handlers.onStartNewChat} onClose={onClose} />;
             case 'chat':

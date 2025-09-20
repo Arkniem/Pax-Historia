@@ -19,7 +19,10 @@ const eventIcons: { [key in WorldEvent['type']]: string } = {
     'CITY_RENAMED': '🏷️',
     'CITY_DESTROYED': '💥',
     'CITY_FOUNDED': '🏛️',
-    'CHAT_INVITATION': '💬'
+    'CHAT_INVITATION': '💬',
+    'DEPLOY_UNIT': '🎖️',
+    'MANUFACTURE_COMPLETE': '🏭',
+    'SCRAP_UNIT': '♻️',
 };
 
 export default function EventLog({ events, onClose }: EventLogProps) {

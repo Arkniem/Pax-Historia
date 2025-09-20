@@ -1,5 +1,4 @@
-
-import React, { memo, useMemo, useState } from 'react';
+import React, { memo, useMemo, useState, useEffect } from 'react';
 import {
   ComposableMap,
   Geographies,
@@ -7,7 +6,7 @@ import {
   ZoomableGroup,
   Marker,
 } from 'react-simple-maps';
-import { Country, Territory, MapData, City } from '../types';
+import { Country, Territory, MapData, City, MilitaryUnit, UnitType } from '../types';
 import { feature } from 'topojson-client';
 import { geoCentroid, geoArea } from 'd3-geo';
 
@@ -16,8 +15,11 @@ interface WorldMapProps {
   territories: { [id: string]: Territory };
   countries: { [name: string]: Country };
   cities?: City[];
+  militaryUnits?: { [id: string]: MilitaryUnit };
+  selectedUnit?: MilitaryUnit | null;
   mapData: MapData;
   onTerritoryClick?: (territoryId: string) => void;
+  onUnitClick?: (unitId: string) => void;
   playerCountryName: string | null;
   selectionMode?: boolean;
   selectedName?: string | null;
@@ -47,8 +49,11 @@ const WorldMap = ({
   territories,
   countries,
   cities = [],
+  militaryUnits = {},
+  selectedUnit = null,
   mapData,
   onTerritoryClick = () => {},
+  onUnitClick = () => {},
   playerCountryName,
   selectionMode = false,
   selectedName = null,
@@ -56,6 +61,15 @@ const WorldMap = ({
 }: WorldMapProps) => {
     const [position, setPosition] = useState({ coordinates: [0, 20] as [number, number], zoom: 1 });
     const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (selectedUnit) {
+            setPosition({
+                coordinates: selectedUnit.coordinates,
+                zoom: 3
+            });
+        }
+    }, [selectedUnit]);
 
     const handleMoveEnd = (pos: { coordinates: [number, number]; zoom: number }) => {
         setPosition(pos);
@@ -327,17 +341,64 @@ const WorldMap = ({
                 </Marker>
             );
         })}
+        
+        {/* MILITARY UNITS */}
+        {Object.values(militaryUnits).map(unit => {
+            const owner = countries[unit.owner];
+            const ownerColor = owner ? owner.color : '#9CA3AF';
+            const iconSize = 4 / position.zoom;
+            const isSelected = selectedUnit?.id === unit.id;
+
+            return (
+                <Marker key={unit.id} coordinates={unit.coordinates as [number, number]}>
+                    <g 
+                        onClick={() => onUnitClick(unit.id)}
+                        style={{ cursor: 'pointer' }}
+                        onMouseEnter={() => setHoveredCountry(unit.owner)}
+                        onMouseLeave={() => setHoveredCountry(null)}
+                    >
+                        <circle 
+                            r={isSelected ? iconSize * 1.5 : iconSize}
+                            fill={ownerColor}
+                            stroke={isSelected ? "#FBBF24" : "#FFFFFF"}
+                            strokeWidth={(isSelected ? 1.5 : 0.75) / position.zoom}
+                            style={{ transition: 'r 0.2s ease-in-out' }}
+                        />
+                        <text
+                            textAnchor="middle"
+                            y={iconSize * -1.5}
+                            stroke="#1F2937"
+                            strokeWidth={0.2 / position.zoom}
+                            strokeLinejoin="round"
+                            style={{
+                                fontFamily: "Inter, system-ui, sans-serif",
+                                fill: "#FFFFFF",
+                                fontSize: `${6 / position.zoom}px`,
+                                fontWeight: '600',
+                                pointerEvents: 'none',
+                            }}
+                        >
+                           {position.zoom > 2 ? unit.name : ""}
+                        </text>
+                    </g>
+                </Marker>
+            );
+        })}
       </>
     );
 
     return (
         <div className="w-full h-full bg-sky-800">
-            <ComposableMap projectionConfig={{ scale: 180 }} style={{ width: '100%', height: '100%' }}>
+            <ComposableMap 
+              projectionConfig={{ scale: 180 }} 
+              style={{ width: '100%', height: '100%' }}
+            >
                 <ZoomableGroup 
                     center={position.coordinates} 
                     zoom={position.zoom} 
                     onMoveEnd={handleMoveEnd}
                     maxZoom={50}
+                    style={{ transition: 'transform 0.5s ease-in-out' }}
                 >
                     {renderGameplayGeographies()}
                 </ZoomableGroup>
