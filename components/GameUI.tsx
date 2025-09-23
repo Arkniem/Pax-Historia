@@ -8,6 +8,8 @@ import CountryStatsPanel from './CountryStatsPanel';
 import DeploymentModal from './DeploymentModal';
 import MilitaryUnitPanel from './MilitaryUnitPanel';
 import { getGeneralAdvice, getAdvisorResponse, simulateWorldEvents } from '../services/geminiService';
+import ActionPanel from './ActionPanel';
+import AdvisorPanel from './AdvisorPanel';
 
 interface GameUIProps {
   gameState: GameState;
@@ -41,71 +43,6 @@ const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose:
                     {children}
                 </div>
             </div>
-        </div>
-    );
-};
-
-const ActionPanel = ({ onSimulate, isSimulating }: { onSimulate: (action: string) => void, isSimulating: boolean }) => {
-  const [action, setAction] = useState('');
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (action.trim() && !isSimulating) {
-      onSimulate(action);
-      setAction('');
-    }
-  };
-  return (
-    <form onSubmit={handleSubmit}>
-      <textarea
-        className="w-full h-24 p-2 bg-gray-700 text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-        placeholder="e.g., Invest in new technologies, seek an alliance with France..."
-        value={action}
-        onChange={(e) => setAction(e.target.value)}
-        disabled={isSimulating}
-      />
-      <button
-        type="submit"
-        disabled={isSimulating || !action.trim()}
-        className="w-full mt-3 bg-primary hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-wait text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out flex items-center justify-center"
-      >
-        {isSimulating ? 'Simulating...' : 'Submit Action'}
-      </button>
-    </form>
-  );
-};
-
-const AdvisorPanel = ({ onAskAdvice, isAdvising, advice }: { onAskAdvice: (question: string) => void, isAdvising: boolean, advice: string | null }) => {
-    const [question, setQuestion] = useState('What should be our nation\'s primary focus right now?');
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (question.trim() && !isAdvising) {
-            onAskAdvice(question);
-        }
-    };
-    return (
-        <div>
-            <form onSubmit={handleSubmit}>
-                <textarea
-                  className="w-full h-20 p-2 bg-gray-700 text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                  placeholder="Ask your advisor for strategic guidance..."
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  disabled={isAdvising}
-                />
-                <button
-                    type="submit"
-                    disabled={isAdvising || !question.trim()}
-                    className="w-full mt-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-wait text-white font-bold py-2 px-4 rounded-lg transition"
-                >
-                    {isAdvising ? 'Thinking...' : 'Ask for Advice'}
-                </button>
-            </form>
-            {advice && (
-                <div className="mt-4 p-3 bg-gray-700 rounded-lg max-h-48 overflow-y-auto">
-                    <h3 className="font-semibold text-indigo-300">Advisor's Counsel:</h3>
-                    <p className="text-sm text-gray-300 whitespace-pre-wrap">{advice}</p>
-                </div>
-            )}
         </div>
     );
 };

@@ -2,7 +2,97 @@ import { GameState, Country, Territory, MapData, City, CountryArsenal, UnitType 
 import * as TopoJSON from 'topojson-client';
 import { geoCentroid } from 'd3-geo';
 
-export const stringToColor = (str: string): string => {
+// A curated list of country colors inspired by Paradox Interactive games for better visual distinction and thematic feel.
+const PARADOX_COUNTRY_COLORS: { [key: string]: string } = {
+    // Europe - Major Powers
+    "France": "#3862be",
+    "United Kingdom": "#d2413c",
+    "Spain": "#f9e100",
+    "Austria": "#fafafa",
+    "Germany": "#8a8a8a",
+    "Russia": "#315c14",
+    "Italy": "#289428",
+    "Turkey": "#529c52", // Ottoman Green
+    "Sweden": "#3465a4",
+    "Poland": "#d30f6b",
+    "Portugal": "#006600",
+    "Netherlands": "#ff8c00",
+    "Denmark": "#c8102e",
+    "Norway": "#ba0c2f",
+    
+    // Europe - Other
+    "Hungary": "#b04a4a",
+    "Belgium": "#f7dc6f",
+    "Switzerland": "#d52b1e",
+    "Greece": "#5cacee",
+    "Ireland": "#169b62",
+    "Finland": "#003580",
+    "Ukraine": "#005bbb",
+    "Romania": "#002b7f",
+    "Serbia": "#c6363c",
+    "Czechia": "#d7141a",
+    "Belarus": "#780000",
+    "Bulgaria": "#00966e",
+    "Lithuania": "#fdb913",
+    "Latvia": "#9e3039",
+    "Estonia": "#4891d9",
+    "Croatia": "#1b448c",
+    "Bosnia and Herz.": "#002395",
+    "Albania": "#e41e20",
+    "Slovenia": "#005da4",
+    "Iceland": "#02529c",
+    
+    // Americas
+    "United States of America": "#425ec1",
+    "Canada": "#d2413c",
+    "Mexico": "#adf2af",
+    "Brazil": "#81b17f",
+    "Argentina": "#6666a4",
+    "Chile": "#e9a362",
+    "Colombia": "#fcd116",
+    "Peru": "#d91023",
+    "Venezuela": "#ffce00",
+    "Cuba": "#0057b7",
+
+    // Asia
+    "China": "#de2910",
+    "Japan": "#e50c0b",
+    "India": "#e50c0b",
+    "Iran": "#00a89c",
+    "South Korea": "#0047a0",
+    "North Korea": "#024fa2",
+    "Vietnam": "#da251d",
+    "Thailand": "#a51931",
+    "Indonesia": "#ce1126",
+    "Saudi Arabia": "#006c35",
+    "Israel": "#0038b8",
+    "Pakistan": "#006600",
+    "Afghanistan": "#736a62",
+    "Mongolia": "#0066b3",
+    "Taiwan": "#002962",
+    "Philippines": "#f7c74a",
+    "Iraq": "#483C32",
+    "Syria": "#ce1126",
+    "Kazakhstan": "#00afca",
+
+    // Africa
+    "Egypt": "#e75a44",
+    "Ethiopia": "#fde100",
+    "South Africa": "#007a4d",
+    "Morocco": "#c1272d",
+    "Nigeria": "#008751",
+    "Dem. Rep. Congo": "#0066cc",
+    "Algeria": "#006233",
+    "Kenya": "#8B4513",
+    "Libya": "#e70013",
+
+    // Oceania
+    "Australia": "#00008b",
+    "New Zealand": "#00247d",
+    "Papua New Guinea": "#c8102e",
+};
+
+const generateColorFromString = (str: string): string => {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
         hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -14,6 +104,10 @@ export const stringToColor = (str: string): string => {
     }
     return color;
 }
+
+export const getCountryColor = (str: string): string => {
+    return PARADOX_COUNTRY_COLORS[str] || generateColorFromString(str);
+};
 
 // Hashing function for deterministic "random" numbers
 const simpleHash = (str: string): number => {
@@ -247,11 +341,20 @@ const INITIAL_CITIES: Omit<City, 'id'>[] = [
     { name: "Los Angeles", coordinates: [-118.2437, 34.0522], territoryId: "USA-06", isCapital: false },
     { name: "Chicago", coordinates: [-87.6298, 41.8781], territoryId: "USA-17", isCapital: false },
     { name: "Boston", coordinates: [-71.0589, 42.3601], territoryId: "USA-25", isCapital: false },
+    { name: "Houston", coordinates: [-95.3698, 29.7604], territoryId: "USA-48", isCapital: false },
+    { name: "Phoenix", coordinates: [-112.0740, 33.4484], territoryId: "USA-04", isCapital: false },
+    { name: "Philadelphia", coordinates: [-75.1652, 39.9526], territoryId: "USA-42", isCapital: false },
+    { name: "Seattle", coordinates: [-122.3321, 47.6062], territoryId: "USA-53", isCapital: false },
+    { name: "Denver", coordinates: [-104.9903, 39.7392], territoryId: "USA-08", isCapital: false },
+    { name: "San Francisco", coordinates: [-122.4194, 37.7749], territoryId: "USA-06", isCapital: false },
+    { name: "Miami", coordinates: [-80.1918, 25.7617], territoryId: "USA-12", isCapital: false },
     { name: "Mexico City", coordinates: [-99.1332, 19.4326], territoryId: "Mexico", isCapital: true },
     { name: "Tenochtitlan", coordinates: [-99.1332, 19.4326], territoryId: "Mexico", isCapital: false }, // Historical alias
     { name: "Ottawa", coordinates: [-75.6972, 45.4215], territoryId: "Canada", isCapital: true },
     { name: "Toronto", coordinates: [-79.3832, 43.6532], territoryId: "Canada", isCapital: false },
     { name: "Montreal", coordinates: [-73.5673, 45.5017], territoryId: "Canada", isCapital: false },
+    { name: "Vancouver", coordinates: [-123.1207, 49.2827], territoryId: "Canada", isCapital: false },
+    { name: "Calgary", coordinates: [-114.0719, 51.0447], territoryId: "Canada", isCapital: false },
     { name: "Havana", coordinates: [-82.3666, 23.1136], territoryId: "Cuba", isCapital: true },
     { name: "Santo Domingo", coordinates: [-69.9312, 18.4861], territoryId: "Dominican Rep.", isCapital: true },
     { name: "Guatemala City", coordinates: [-90.5069, 14.6349], territoryId: "Guatemala", isCapital: true },
@@ -264,6 +367,7 @@ const INITIAL_CITIES: Omit<City, 'id'>[] = [
     { name: "Kingston", coordinates: [-76.7920, 17.9712], territoryId: "Jamaica", isCapital: true },
     { name: "Port-au-Prince", coordinates: [-72.3375, 18.5945], territoryId: "Haiti", isCapital: true },
     { name: "Nassau", coordinates: [-77.3554, 25.0479], territoryId: "The Bahamas", isCapital: true },
+    { name: "Nuuk", coordinates: [-51.7216, 64.1836], territoryId: "Greenland", isCapital: true },
 
     // South America
     { name: "Cusco", coordinates: [-71.9675, -13.5320], territoryId: "Peru", isCapital: false }, // Incan Capital
@@ -284,11 +388,22 @@ const INITIAL_CITIES: Omit<City, 'id'>[] = [
 
     // Europe - West & Central
     { name: "London", coordinates: [-0.1278, 51.5074], territoryId: "United Kingdom", isCapital: true },
+    { name: "Manchester", coordinates: [-2.2426, 53.4808], territoryId: "United Kingdom", isCapital: false },
+    { name: "Edinburgh", coordinates: [-3.1883, 55.9533], territoryId: "United Kingdom", isCapital: false },
+    { name: "Birmingham", coordinates: [-1.8904, 52.4862], territoryId: "United Kingdom", isCapital: false },
     { name: "Paris", coordinates: [2.3522, 48.8566], territoryId: "France", isCapital: true },
+    { name: "Marseille", coordinates: [5.3698, 43.2965], territoryId: "France", isCapital: false },
+    { name: "Lyon", coordinates: [4.8357, 45.7640], territoryId: "France", isCapital: false },
     { name: "Rome", coordinates: [12.4964, 41.9028], territoryId: "Italy", isCapital: true },
+    { name: "Milan", coordinates: [9.1900, 45.4642], territoryId: "Italy", isCapital: false },
+    { name: "Naples", coordinates: [14.2681, 40.8518], territoryId: "Italy", isCapital: false },
     { name: "Madrid", coordinates: [-3.7038, 40.4168], territoryId: "Spain", isCapital: true },
+    { name: "Barcelona", coordinates: [2.1734, 41.3851], territoryId: "Spain", isCapital: false },
     { name: "Lisbon", coordinates: [-9.1393, 38.7223], territoryId: "Portugal", isCapital: true },
     { name: "Berlin", coordinates: [13.4050, 52.5200], territoryId: "Germany", isCapital: true },
+    { name: "Munich", coordinates: [11.5820, 48.1351], territoryId: "Germany", isCapital: false },
+    { name: "Hamburg", coordinates: [9.9937, 53.5511], territoryId: "Germany", isCapital: false },
+    { name: "Frankfurt", coordinates: [8.6821, 50.1109], territoryId: "Germany", isCapital: false },
     { name: "Vienna", coordinates: [16.3738, 48.2082], territoryId: "Austria", isCapital: true },
     { name: "Prague", coordinates: [14.4378, 50.0755], territoryId: "Czechia", isCapital: true },
     { name: "Warsaw", coordinates: [21.0122, 52.2297], territoryId: "Poland", isCapital: true },
@@ -314,6 +429,9 @@ const INITIAL_CITIES: Omit<City, 'id'>[] = [
     // Europe - East & Southeast
     { name: "Moscow", coordinates: [37.6173, 55.7558], territoryId: "Russia", isCapital: true },
     { name: "St. Petersburg", coordinates: [30.3351, 59.9343], territoryId: "Russia", isCapital: false },
+    { name: "Novosibirsk", coordinates: [82.9204, 55.0301], territoryId: "Russia", isCapital: false },
+    { name: "Yekaterinburg", coordinates: [60.6057, 56.8389], territoryId: "Russia", isCapital: false },
+    { name: "Vladivostok", coordinates: [131.8855, 43.1155], territoryId: "Russia", isCapital: false },
     { name: "Kyiv", coordinates: [30.5234, 50.4501], territoryId: "Ukraine", isCapital: true },
     { name: "Minsk", coordinates: [27.5615, 53.9045], territoryId: "Belarus", isCapital: true },
     { name: "Athens", coordinates: [23.7275, 37.9838], territoryId: "Greece", isCapital: true },
@@ -360,11 +478,13 @@ const INITIAL_CITIES: Omit<City, 'id'>[] = [
 
     // Africa
     { name: "Cairo", coordinates: [31.2357, 30.0444], territoryId: "Egypt", isCapital: true },
+    { name: "Giza", coordinates: [31.2128, 29.9871], territoryId: "Egypt", isCapital: false },
     { name: "Alexandria", coordinates: [29.9187, 31.2001], territoryId: "Egypt", isCapital: false }, // Hellenistic center
     { name: "Thebes", coordinates: [32.6396, 25.6872], territoryId: "Egypt", isCapital: false }, // Ancient capital
     { name: "Carthage", coordinates: [10.3230, 36.8530], territoryId: "Tunisia", isCapital: false }, // Ancient city
     { name: "Tunis", coordinates: [10.1815, 36.8065], territoryId: "Tunisia", isCapital: true },
     { name: "Marrakech", coordinates: [-7.9811, 31.6295], territoryId: "Morocco", isCapital: false },
+    { name: "Casablanca", coordinates: [-7.6180, 33.5731], territoryId: "Morocco", isCapital: false },
     { name: "Rabat", coordinates: [-6.8498, 33.9716], territoryId: "Morocco", isCapital: true },
     { name: "Algiers", coordinates: [3.0588, 36.7764], territoryId: "Algeria", isCapital: true },
     { name: "Tripoli", coordinates: [13.1913, 32.8872], territoryId: "Libya", isCapital: true },
@@ -376,9 +496,11 @@ const INITIAL_CITIES: Omit<City, 'id'>[] = [
     { name: "Harare", coordinates: [31.0530, -17.8252], territoryId: "Zimbabwe", isCapital: true },
     { name: "Lagos", coordinates: [3.3792, 6.5244], territoryId: "Nigeria", isCapital: false },
     { name: "Abuja", coordinates: [7.4951, 9.0579], territoryId: "Nigeria", isCapital: true },
+    { name: "Ibadan", coordinates: [3.9470, 7.3776], territoryId: "Nigeria", isCapital: false },
     { name: "Kinshasa", coordinates: [15.2663, -4.4419], territoryId: "Dem. Rep. Congo", isCapital: true },
     { name: "Cape Town", coordinates: [18.4241, -33.9249], territoryId: "South Africa", isCapital: false },
     { name: "Pretoria", coordinates: [28.1881, -25.7461], territoryId: "South Africa", isCapital: true },
+    { name: "Johannesburg", coordinates: [28.0473, -26.2041], territoryId: "South Africa", isCapital: false },
     { name: "Nairobi", coordinates: [36.8219, -1.2921], territoryId: "Kenya", isCapital: true },
     { name: "Dakar", coordinates: [-17.4677, 14.7167], territoryId: "Senegal", isCapital: true },
     { name: "Accra", coordinates: [-0.2057, 5.6037], territoryId: "Ghana", isCapital: true },
@@ -394,6 +516,8 @@ const INITIAL_CITIES: Omit<City, 'id'>[] = [
     { name: "Gaborone", coordinates: [25.9201, -24.6541], territoryId: "Botswana", isCapital: true },
     { name: "Antananarivo", coordinates: [47.5214, -18.8792], territoryId: "Madagascar", isCapital: true },
     { name: "Yaoundé", coordinates: [11.5021, 3.8480], territoryId: "Cameroon", isCapital: true },
+    { name: "Mogadishu", coordinates: [45.3182, 2.0469], territoryId: "Somalia", isCapital: true },
+    { name: "Laayoune", coordinates: [-13.2033, 27.1536], territoryId: "W. Sahara", isCapital: true },
 
     // Asia - East
     { name: "Beijing", coordinates: [116.4074, 39.9042], territoryId: "China", isCapital: true },
@@ -401,8 +525,15 @@ const INITIAL_CITIES: Omit<City, 'id'>[] = [
     { name: "Xi'an", coordinates: [108.9546, 34.2655], territoryId: "China", isCapital: false }, // Ancient capital
     { name: "Nanjing", coordinates: [118.7969, 32.0603], territoryId: "China", isCapital: false }, // Former capital
     { name: "Hong Kong", coordinates: [114.1694, 22.3193], territoryId: "China", isCapital: false },
+    { name: "Guangzhou", coordinates: [113.2644, 23.1291], territoryId: "China", isCapital: false },
+    { name: "Shenzhen", coordinates: [114.0579, 22.5431], territoryId: "China", isCapital: false },
+    { name: "Chengdu", coordinates: [104.0668, 30.5728], territoryId: "China", isCapital: false },
+    { name: "Chongqing", coordinates: [106.5516, 29.5630], territoryId: "China", isCapital: false },
     { name: "Tokyo", coordinates: [139.6917, 35.6895], territoryId: "Japan", isCapital: true },
     { name: "Kyoto", coordinates: [135.7681, 35.0116], territoryId: "Japan", isCapital: false }, // Imperial capital
+    { name: "Osaka", coordinates: [135.5023, 34.6937], territoryId: "Japan", isCapital: false },
+    { name: "Nagoya", coordinates: [136.9066, 35.1815], territoryId: "Japan", isCapital: false },
+    { name: "Sapporo", coordinates: [141.3545, 43.0618], territoryId: "Japan", isCapital: false },
     { name: "Seoul", coordinates: [126.9780, 37.5665], territoryId: "South Korea", isCapital: true },
     { name: "Pyongyang", coordinates: [125.7625, 39.0392], territoryId: "North Korea", isCapital: true },
     { name: "Taipei", coordinates: [121.5654, 25.0330], territoryId: "Taiwan", isCapital: true },
@@ -413,6 +544,9 @@ const INITIAL_CITIES: Omit<City, 'id'>[] = [
     { name: "Mumbai", coordinates: [72.8777, 19.0760], territoryId: "India", isCapital: false },
     { name: "Kolkata", coordinates: [88.3639, 22.5726], territoryId: "India", isCapital: false },
     { name: "Varanasi", coordinates: [83.0100, 25.3176], territoryId: "India", isCapital: false }, // Ancient religious city
+    { name: "Bangalore", coordinates: [77.5946, 12.9716], territoryId: "India", isCapital: false },
+    { name: "Chennai", coordinates: [80.2707, 13.0827], territoryId: "India", isCapital: false },
+    { name: "Hyderabad", coordinates: [78.4867, 17.3850], territoryId: "India", isCapital: false },
     { name: "Islamabad", coordinates: [73.0479, 33.6844], territoryId: "Pakistan", isCapital: true },
     { name: "Mohenjo-daro", coordinates: [68.1313, 27.3292], territoryId: "Pakistan", isCapital: false }, // Indus Valley city
     { name: "Dhaka", coordinates: [90.4125, 23.8103], territoryId: "Bangladesh", isCapital: true },
@@ -436,6 +570,8 @@ const INITIAL_CITIES: Omit<City, 'id'>[] = [
     { name: "Canberra", coordinates: [149.1300, -35.2809], territoryId: "Australia", isCapital: true },
     { name: "Sydney", coordinates: [151.2093, -33.8688], territoryId: "Australia", isCapital: false },
     { name: "Melbourne", coordinates: [144.9631, -37.8136], territoryId: "Australia", isCapital: false },
+    { name: "Perth", coordinates: [115.8605, -31.9505], territoryId: "Australia", isCapital: false },
+    { name: "Brisbane", coordinates: [153.0251, -27.4698], territoryId: "Australia", isCapital: false },
     { name: "Wellington", coordinates: [174.7762, -41.2865], territoryId: "New Zealand", isCapital: true },
     { name: "Port Moresby", coordinates: [147.1797, -9.4431], territoryId: "Papua New Guinea", isCapital: true },
     { name: "Suva", coordinates: [178.4419, -18.1416], territoryId: "Fiji", isCapital: true },
@@ -542,7 +678,7 @@ export function generateInitialGameState(mapData: MapData): GameState {
 
       countries[name] = {
         name,
-        color: stringToColor(name),
+        color: getCountryColor(name),
         gdp: realData?.gdp ?? 10 + (hash % 200),
         population: realData?.population ?? 1 + (hash % 50),
         stability: realData?.stability ?? 30 + (hash % 60),

@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
-import { GameState, WorldEvent, GamePhase, MapData, Country, City, DiplomaticChat, ChatMessage, UnitType, MilitaryUnit, UnitActionOutcome, Toast } from './types';
+import { GameState, WorldEvent, GamePhase, MapData, Country, City, DiplomaticChat, ChatMessage, UnitType, MilitaryUnit, UnitActionOutcome, Toast, Territory } from './types';
 import CountrySelectionScreen from './components/CountrySelectionScreen';
 import GameUI from './components/GameUI';
-import { generateInitialGameState, stringToColor } from './services/stateService';
+import { generateInitialGameState, getCountryColor } from './services/stateService';
 import { getGroupChatTurn, generateDeploymentFromBrief, getUnitActionOutcome } from './services/geminiService';
 
 const atlasURLs: { [key: string]: string } = {
@@ -105,7 +106,8 @@ const AppContent = () => {
     setGameState(prevState => {
         if (!prevState) return null;
 
-        const territory = Object.values(prevState.territories).find(t => t.name === selectionName);
+        // FIX: Explicitly type 't' as Territory to help TypeScript inference.
+        const territory = Object.values(prevState.territories).find((t: Territory) => t.name === selectionName);
         if (!territory) return prevState;
 
         const parentCountry = prevState.countries[territory.parentCountryName];
@@ -119,7 +121,7 @@ const AppContent = () => {
 
         const newCountry: Country = {
             name: selectionName,
-            color: stringToColor(selectionName + " secession"), // Salt to get a different color
+            color: getCountryColor(selectionName + " secession"), // Salt to get a different color
             gdp: Math.max(1, Math.floor(parentCountry.gdp * (0.05 + (hash % 10) / 100))),
             population: Math.max(0.1, parseFloat((parentCountry.population * (0.05 + (hash % 10) / 100)).toFixed(1))),
             stability: 30 + (hash % 25), // Secession is an unstable act
@@ -176,11 +178,13 @@ const AppContent = () => {
         const [aggressorName, targetCountryName] = event.countries;
         if (event.territoryNames && event.territoryNames.length > 0) {
           event.territoryNames.forEach(name => {
-            const territoryToUpdate = Object.values(state.territories).find(t => t.name === name);
+            // FIX: Explicitly type 't' as Territory to help TypeScript inference.
+            const territoryToUpdate = Object.values(state.territories).find((t: Territory) => t.name === name);
             if (territoryToUpdate) state.territories[territoryToUpdate.id] = { ...territoryToUpdate, owner: aggressorName };
           });
         } else {
-          Object.values(state.territories).filter(t => t.owner === targetCountryName).forEach(t => {
+          // FIX: Explicitly type 't' as Territory to help TypeScript inference.
+          Object.values(state.territories).filter((t: Territory) => t.owner === targetCountryName).forEach((t: Territory) => {
             state.territories[t.id] = { ...t, owner: aggressorName };
           });
         }
@@ -192,20 +196,22 @@ const AppContent = () => {
           let hash = 0;
           for (let i = 0; i < newCountryName.length; i++) { hash = newCountryName.charCodeAt(i) + ((hash << 5) - hash); }
           state.countries[newCountryName] = { 
-              name: newCountryName, color: stringToColor(newCountryName), gdp: 5 + (Math.abs(hash) % 45),
+              name: newCountryName, color: getCountryColor(newCountryName), gdp: 5 + (Math.abs(hash) % 45),
               population: 1 + (Math.abs(hash) % 10), stability: 40 + (Math.abs(hash) % 20), resources: [],
               militaryStrength: 5 + (Math.abs(hash) % 15), militaryTech: 1 + (Math.abs(hash) % 4),
           };
         }
         territoryNames.forEach(name => {
-          const territoryToUpdate = Object.values(state.territories).find(t => t.name === name);
+          // FIX: Explicitly type 't' as Territory to help TypeScript inference.
+          const territoryToUpdate = Object.values(state.territories).find((t: Territory) => t.name === name);
           if (territoryToUpdate) state.territories[territoryToUpdate.id] = { ...territoryToUpdate, owner: newCountryName };
         });
       },
       CITY_FOUNDED: (event) => {
         const { newCityName, territoryForNewCity, newCityCoordinates } = event;
         if (!newCityName || !territoryForNewCity || !newCityCoordinates) return;
-        const territoryExists = Object.values(state.territories).find(t => t.name === territoryForNewCity);
+        // FIX: Explicitly type 't' as Territory to help TypeScript inference.
+        const territoryExists = Object.values(state.territories).find((t: Territory) => t.name === territoryForNewCity);
         if (territoryExists) {
           state.cities.push({ id: `${newCityName}-${Date.now()}`, name: newCityName, coordinates: newCityCoordinates, territoryId: territoryExists.id, isCapital: false });
         }
@@ -224,7 +230,8 @@ const AppContent = () => {
         if (!country || !event.unitType || !event.locationDescription) return;
   
         const tempGameStateForApi = { ...prevState, ...state };
-        const currentUnitCount = Object.values(state.militaryUnits).filter(u => u.owner === countryName && u.type === event.unitType).length;
+        // FIX: Explicitly type 'u' as MilitaryUnit to help TypeScript inference.
+        const currentUnitCount = Object.values(state.militaryUnits).filter((u: MilitaryUnit) => u.owner === countryName && u.type === event.unitType).length;
         const maxUnits = tempGameStateForApi.arsenal[countryName]?.[event.unitType]?.maxUnits ?? 0;
   
         if (currentUnitCount >= maxUnits) {
@@ -445,9 +452,12 @@ const AppContent = () => {
 
         // Validate against arsenal
         const currentCounts: { [key in UnitType]: number } = {
-            [UnitType.ARMY]: Object.values(gameState.militaryUnits).filter(u => u.owner === country.name && u.type === UnitType.ARMY).length,
-            [UnitType.NAVY]: Object.values(gameState.militaryUnits).filter(u => u.owner === country.name && u.type === UnitType.NAVY).length,
-            [UnitType.AIR_FORCE]: Object.values(gameState.militaryUnits).filter(u => u.owner === country.name && u.type === UnitType.AIR_FORCE).length,
+            // FIX: Explicitly type 'u' as MilitaryUnit to help TypeScript inference.
+            [UnitType.ARMY]: Object.values(gameState.militaryUnits).filter((u: MilitaryUnit) => u.owner === country.name && u.type === UnitType.ARMY).length,
+            // FIX: Explicitly type 'u' as MilitaryUnit to help TypeScript inference.
+            [UnitType.NAVY]: Object.values(gameState.militaryUnits).filter((u: MilitaryUnit) => u.owner === country.name && u.type === UnitType.NAVY).length,
+            // FIX: Explicitly type 'u' as MilitaryUnit to help TypeScript inference.
+            [UnitType.AIR_FORCE]: Object.values(gameState.militaryUnits).filter((u: MilitaryUnit) => u.owner === country.name && u.type === UnitType.AIR_FORCE).length,
         };
 
         const proposedCounts = proposedUnits.reduce((acc, unit) => {
