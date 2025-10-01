@@ -1,5 +1,5 @@
 import React, { memo, useMemo, useState, useEffect, useRef } from 'react';
-import { Country, Territory, MapData, City, MilitaryUnit } from '../types';
+import { Country, Territory, MapData, City, MilitaryUnit, UnitType } from '../types';
 import { feature } from 'topojson-client';
 import { geoCentroid, geoArea, geoPath, geoMercator } from 'd3-geo';
 import { zoom, zoomIdentity } from 'd3-zoom';
@@ -37,6 +37,13 @@ const isColorBlueish = (hexColor: string): boolean => {
     if (!rgb) return false;
     // Check if blue is the dominant color and it's not too dark/gray
     return rgb.b > rgb.r && rgb.b > rgb.g && rgb.b > 80;
+};
+
+// --- Unit Icon Definitions ---
+const UNIT_ICON_PATHS: { [key in UnitType]: string } = {
+  [UnitType.ARMY]: "M0,-4 L4,2 L0,0 L-4,2 Z",      // Chevron for land units
+  [UnitType.NAVY]: "M-5,2 L5,2 L3,-3 L-3,-3 Z",    // Simple ship hull
+  [UnitType.AIR_FORCE]: "M0,-5 L4,2 L0,1 L-4,2 Z", // Simple jet shape
 };
 
 // --- Main Component ---
@@ -341,8 +348,9 @@ const WorldMap = ({
 
                      const owner = countries[unit.owner];
                      const ownerColor = owner ? owner.color : '#9CA3AF';
-                     const iconSize = 4 / Math.sqrt(transform.k);
+                     const iconScale = 0.8 / Math.sqrt(transform.k);
                      const isSelected = selectedUnit?.id === unit.id;
+                     const finalScale = isSelected ? iconScale * 1.5 : iconScale;
 
                      return (
                         <g key={unit.id} transform={`translate(${coords[0]}, ${coords[1]})`}
@@ -351,16 +359,18 @@ const WorldMap = ({
                            onMouseEnter={() => setHoveredCountry(unit.owner)}
                            onMouseLeave={() => setHoveredCountry(null)}
                         >
-                            <circle 
-                                r={isSelected ? iconSize * 1.5 : iconSize}
+                            <path 
+                                d={UNIT_ICON_PATHS[unit.type]}
+                                transform={`scale(${finalScale})`}
                                 fill={ownerColor}
                                 stroke={isSelected ? "#FBBF24" : "#FFFFFF"}
                                 strokeWidth={(isSelected ? 1.5 : 0.75) / transform.k}
                                 className="transition-all duration-200"
+                                strokeLinejoin="round"
                             />
                              <text
                                 textAnchor="middle"
-                                y={iconSize * -1.5}
+                                y={(isSelected ? -10 : -8) / Math.sqrt(transform.k)}
                                 stroke="#1F2937"
                                 strokeWidth={0.2 / transform.k}
                                 strokeLinejoin="round"

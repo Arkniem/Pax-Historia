@@ -189,8 +189,7 @@ export async function simulateWorldEvents(gameState: GameState, playerAction: st
 
     try {
         const response = await ai.models.generateContent({
-            // FIX: Use a recommended model from the guidelines.
-            model: "gemini-2.5-Pro",
+            model: "gemini-2.5-pro",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -304,7 +303,7 @@ export async function getGroupChatTurn(
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash-lite",
+            model: "gemini-2.5-flash",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
