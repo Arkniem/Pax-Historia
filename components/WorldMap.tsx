@@ -169,10 +169,9 @@ const WorldMap = ({
                 fill={getFillColor()}
                 stroke={'#000000'}
                 strokeWidth={isParentSelected || isThisTerritorySelected ? 2  : 1 }
-                style={{ vectorEffect: 'non-scaling-stroke' }}
                 onClick={() => onTerritoryClick(territoryId)}
                 className={isSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}
-                style={{ opacity: isSelectable ? 1 : 0.5 }}
+                style={{ opacity: isSelectable ? 1 : 0.5, vectorEffect: 'non-scaling-stroke' }}
                 />
             );
         }
@@ -276,9 +275,9 @@ const WorldMap = ({
     const renderLabelsAndMarkers = () => {
         if (selectionMode) return null;
 
-        const citiesToShow = (!hoveredCountry || transform.k < 1.5) ? [] : cities.filter(city => {
+        const citiesToShow = (transform.k < 1.5) ? [] : cities.filter(city => {
             const territory = territories[city.territoryId];
-            return territory && territory.owner === hoveredCountry;
+            return territory;
         });
 
         return (

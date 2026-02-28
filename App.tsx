@@ -7,7 +7,7 @@ import { generateInitialGameState, getCountryColor } from './services/stateServi
 import { getGroupChatTurn, generateDeploymentFromBrief, getUnitActionOutcome } from './services/geminiService';
 
 const atlasURLs: { [key: string]: string } = {
-  world: 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json',
+  world: 'https://cdn.jsdelivr.net/npm/visionscarto-world-atlas@1.0.0/world/110m.json',
   us: 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json',
 };
 
