@@ -55,24 +55,38 @@ const WorldMap = ({
                   selectionType = 'country',
 }: WorldMapProps) => {
     const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
-    const [transform, setTransform] = useState(zoomIdentity);
     const svgRef = useRef<SVGSVGElement>(null);
+    const [transform, setTransform] = useState(zoomIdentity);
+    const transformRef = useRef(zoomIdentity);
     const [{ width, height }, setDimensions] = useState({ width: 0, height: 0 });
     const [worldWidth, setWorldWidth] = useState(0);
 
     // --- D3 Zoom & Pan Setup ---
+
     useEffect(() => {
         if (!svgRef.current || !width || !height) return;
-        const svg = select(svgRef.current as SVGSVGElement);
+        const svg = select(svgRef.current);
+
         const zoomBehavior = zoom()
         .scaleExtent([1, 50]) // Min zoom is 1 (default), max is 50x.
         .translateExtent([
-            [-Infinity, projection([0,85])[1]],
-                         [Infinity, projection([0,-85])[1]],
+            [-Infinity, projection([0, 85])[1]],
+            [Infinity, projection([0, -85])[1]],
         ]) // World borders
         .on('zoom', (event) => {
-            setTransform(event.transform);
+            // Update the DOM immediately for cam
+            svg.select('g').attr('transform', event.transform.toString());
+            transformRef.current = event.transform;
+
+            // Throttle React state updates
+            if (!transformRef.current._raf) {
+                transformRef.current._raf = requestAnimationFrame(() => {
+                    setTransform(transformRef.current!);
+                    transformRef.current!._raf = undefined;
+                });
+            }
         });
+
         svg.call(zoomBehavior);
     }, [width, height]);
 
