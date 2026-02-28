@@ -24,7 +24,8 @@ export const useToasts = () => {
   return context;
 };
 
-const ToastProvider = ({ children }: { children: React.ReactNode }) => {
+// FIX: Use React.PropsWithChildren for components that accept children props to avoid typing errors.
+const ToastProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const addToast = (message: string, type: Toast['type']) => {
@@ -48,7 +49,8 @@ const AppContent = () => {
   const [mapData, setMapData] = useState<MapData | null>(null);
   const [gamePhase, setGamePhase] = useState<GamePhase>(GamePhase.LOADING);
   const [error, setError] = useState<string | null>(null);
-  const { addToast } = useToasts();
+  // FIX: Get toasts from the useToasts hook at the top of the component to avoid redundant calls.
+  const { toasts, addToast } = useToasts();
   
   const gameStateRef = useRef(gameState);
   useEffect(() => {
@@ -106,8 +108,8 @@ const AppContent = () => {
     setGameState(prevState => {
         if (!prevState) return null;
 
-        // FIX: Explicitly type 't' as Territory to help TypeScript inference.
-        const territory = Object.values(prevState.territories).find((t: Territory) => t.name === selectionName);
+        // FIX: Cast result of Object.values to the correct type to avoid 'unknown' type errors.
+        const territory = (Object.values(prevState.territories) as Territory[]).find(t => t.name === selectionName);
         if (!territory) return prevState;
 
         const parentCountry = prevState.countries[territory.parentCountryName];
@@ -178,13 +180,13 @@ const AppContent = () => {
         const [aggressorName, targetCountryName] = event.countries;
         if (event.territoryNames && event.territoryNames.length > 0) {
           event.territoryNames.forEach(name => {
-            // FIX: Explicitly type 't' as Territory to help TypeScript inference.
-            const territoryToUpdate = Object.values(state.territories).find((t: Territory) => t.name === name);
+            // FIX: Cast result of Object.values to the correct type to avoid 'unknown' type errors.
+            const territoryToUpdate = (Object.values(state.territories) as Territory[]).find(t => t.name === name);
             if (territoryToUpdate) state.territories[territoryToUpdate.id] = { ...territoryToUpdate, owner: aggressorName };
           });
         } else {
-          // FIX: Explicitly type 't' as Territory to help TypeScript inference.
-          Object.values(state.territories).filter((t: Territory) => t.owner === targetCountryName).forEach((t: Territory) => {
+          // FIX: Cast result of Object.values to the correct type to avoid 'unknown' type errors.
+          (Object.values(state.territories) as Territory[]).filter(t => t.owner === targetCountryName).forEach(t => {
             state.territories[t.id] = { ...t, owner: aggressorName };
           });
         }
@@ -202,16 +204,16 @@ const AppContent = () => {
           };
         }
         territoryNames.forEach(name => {
-          // FIX: Explicitly type 't' as Territory to help TypeScript inference.
-          const territoryToUpdate = Object.values(state.territories).find((t: Territory) => t.name === name);
+          // FIX: Cast result of Object.values to the correct type to avoid 'unknown' type errors.
+          const territoryToUpdate = (Object.values(state.territories) as Territory[]).find(t => t.name === name);
           if (territoryToUpdate) state.territories[territoryToUpdate.id] = { ...territoryToUpdate, owner: newCountryName };
         });
       },
       CITY_FOUNDED: (event) => {
         const { newCityName, territoryForNewCity, newCityCoordinates } = event;
         if (!newCityName || !territoryForNewCity || !newCityCoordinates) return;
-        // FIX: Explicitly type 't' as Territory to help TypeScript inference.
-        const territoryExists = Object.values(state.territories).find((t: Territory) => t.name === territoryForNewCity);
+        // FIX: Cast result of Object.values to the correct type to avoid 'unknown' type errors.
+        const territoryExists = (Object.values(state.territories) as Territory[]).find(t => t.name === territoryForNewCity);
         if (territoryExists) {
           state.cities.push({ id: `${newCityName}-${Date.now()}`, name: newCityName, coordinates: newCityCoordinates, territoryId: territoryExists.id, isCapital: false });
         }
@@ -230,8 +232,8 @@ const AppContent = () => {
         if (!country || !event.unitType || !event.locationDescription) return;
   
         const tempGameStateForApi = { ...prevState, ...state };
-        // FIX: Explicitly type 'u' as MilitaryUnit to help TypeScript inference.
-        const currentUnitCount = Object.values(state.militaryUnits).filter((u: MilitaryUnit) => u.owner === countryName && u.type === event.unitType).length;
+        // FIX: Cast result of Object.values to the correct type to avoid 'unknown' type errors.
+        const currentUnitCount = (Object.values(state.militaryUnits) as MilitaryUnit[]).filter(u => u.owner === countryName && u.type === event.unitType).length;
         const maxUnits = tempGameStateForApi.arsenal[countryName]?.[event.unitType]?.maxUnits ?? 0;
   
         if (currentUnitCount >= maxUnits) {
@@ -452,12 +454,12 @@ const AppContent = () => {
 
         // Validate against arsenal
         const currentCounts: { [key in UnitType]: number } = {
-            // FIX: Explicitly type 'u' as MilitaryUnit to help TypeScript inference.
-            [UnitType.ARMY]: Object.values(gameState.militaryUnits).filter((u: MilitaryUnit) => u.owner === country.name && u.type === UnitType.ARMY).length,
-            // FIX: Explicitly type 'u' as MilitaryUnit to help TypeScript inference.
-            [UnitType.NAVY]: Object.values(gameState.militaryUnits).filter((u: MilitaryUnit) => u.owner === country.name && u.type === UnitType.NAVY).length,
-            // FIX: Explicitly type 'u' as MilitaryUnit to help TypeScript inference.
-            [UnitType.AIR_FORCE]: Object.values(gameState.militaryUnits).filter((u: MilitaryUnit) => u.owner === country.name && u.type === UnitType.AIR_FORCE).length,
+            // FIX: Cast result of Object.values to the correct type to avoid 'unknown' type errors.
+            [UnitType.ARMY]: (Object.values(gameState.militaryUnits) as MilitaryUnit[]).filter(u => u.owner === country.name && u.type === UnitType.ARMY).length,
+            // FIX: Cast result of Object.values to the correct type to avoid 'unknown' type errors.
+            [UnitType.NAVY]: (Object.values(gameState.militaryUnits) as MilitaryUnit[]).filter(u => u.owner === country.name && u.type === UnitType.NAVY).length,
+            // FIX: Cast result of Object.values to the correct type to avoid 'unknown' type errors.
+            [UnitType.AIR_FORCE]: (Object.values(gameState.militaryUnits) as MilitaryUnit[]).filter(u => u.owner === country.name && u.type === UnitType.AIR_FORCE).length,
         };
 
         const proposedCounts = proposedUnits.reduce((acc, unit) => {
@@ -608,7 +610,7 @@ const AppContent = () => {
       <GameUI
         gameState={gameState}
         mapData={mapData}
-        toasts={useToasts().toasts}
+        toasts={toasts}
         onNewEvents={handleNewEvents}
         pendingInvitations={gameState.pendingInvitations}
         onCreateChat={handleCreateChat}

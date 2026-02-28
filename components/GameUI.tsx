@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, WorldEvent, Country, MapData, DiplomaticChat, UnitType, MilitaryUnit, Toast } from '../types';
 import WorldMap from './WorldMap';
@@ -30,7 +31,13 @@ interface GameUIProps {
 
 type DiplomacyView = 'closed' | 'lobby' | 'chat' | 'invitations';
 
-const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode }) => {
+type ModalProps = {
+    isOpen: boolean;
+    onClose: () => void;
+    title: string;
+};
+// FIX: Use React.PropsWithChildren for components that accept children props to avoid typing errors.
+const Modal = ({ isOpen, onClose, title, children }: React.PropsWithChildren<ModalProps>) => {
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
