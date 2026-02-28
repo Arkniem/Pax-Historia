@@ -71,7 +71,7 @@ const WorldMap = ({
         .scaleExtent([1, 50]) // Min zoom is 1 (default), max is 50x.
         .translateExtent([
             [-Infinity, projection([0, 85])[1]],
-            [Infinity, projection([0, -85])[1]],
+                         [Infinity, projection([0, -85])[1]],
         ]) // World borders
         .on('zoom', (event) => {
             // Update the DOM immediately for cam
@@ -199,7 +199,7 @@ const WorldMap = ({
             fill={fillColor}
             stroke={hoveredCountry === owner?.name ? '#FFFFFF' : '#000000'}
             strokeWidth={hoveredCountry === owner?.name ? 2 : 1 }
-            style={{ vectorEffect: 'non-scaling-stroke' }}
+            style={{ vectorEffect: 'non-scaling-stroke', filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.25))' }}
             className={isClickable ? 'cursor-pointer' : ''}
             onClick={() => isClickable && onTerritoryClick(territoryId)}
             onMouseEnter={() => owner && setHoveredCountry(owner.name)}
@@ -267,7 +267,7 @@ const WorldMap = ({
             // Proportional to sqrt of area (like a radius), inversely proportional to name length.
             const fontScale = 1.6; // Tuning parameter
             const minFontSize = 2.5;
-            const maxFontSize = 18.0;
+            const maxFontSize = 20.0;
 
             let baseFontSize = (Math.sqrt(projectedArea) / displayName.length) * fontScale;
 
@@ -405,8 +405,11 @@ const WorldMap = ({
         return [leftEdgeIndex, leftEdgeIndex + 1];
     }, [transform.x, transform.k, worldWidth]);
 
+
     return (
-        <div className="w-full h-full bg-sky-800">
+        <div
+        className="w-full h-full"
+        style={{backgroundImage: `radial-gradient(circle, #075985 0%, #082f49 100%)`,}}>
         <svg ref={svgRef} width="100%" height="100%">
         <g transform={transform.toString()}>
         {worldWidth > 0 ? (
