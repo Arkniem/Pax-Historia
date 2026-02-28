@@ -73,6 +73,10 @@ const WorldMap = ({
         const svg = select(svgRef.current as SVGSVGElement);
         const zoomBehavior = zoom()
             .scaleExtent([1, 50]) // Min zoom is 1 (default), max is 50x.
+            .translateExtent([
+                [-Infinity, projection([0,85])[1]],
+                [Infinity, projection([0,-85])[1]],
+            ]) // World borders
             .on('zoom', (event) => {
                 setTransform(event.transform);
             });
