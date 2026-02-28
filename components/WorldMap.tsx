@@ -394,25 +394,34 @@ const WorldMap = ({
         );
     }
     
+    const visibleIndices = useMemo(() => {
+        if (worldWidth <= 0) return [0];
+
+        const currentX = transform.x / transform.k;
+        const centerIndex = Math.round(-currentX / worldWidth);
+
+        return [centerIndex - 1, centerIndex, centerIndex + 1];
+    }, [transform.x, transform.k, worldWidth]);
+
     return (
         <div className="w-full h-full bg-sky-800">
-            <svg ref={svgRef} width="100%" height="100%">
-                <g transform={transform.toString()}>
-                    {worldWidth > 0 ? (
-                        [-1, 0, 1].map(i => (
-                            <g key={i} transform={`translate(${i * worldWidth}, 0)`}>
-                                {renderTerritories()}
-                                {renderLabelsAndMarkers()}
-                            </g>
-                        ))
-                    ) : (
-                        <>
-                            {renderTerritories()}
-                            {renderLabelsAndMarkers()}
-                        </>
-                    )}
+        <svg ref={svgRef} width="100%" height="100%">
+        <g transform={transform.toString()}>
+        {worldWidth > 0 ? (
+            visibleIndices.map(i => (
+                <g key={i} transform={`translate(${i * worldWidth}, 0)`}>
+                {renderTerritories()}
+                {renderLabelsAndMarkers()}
                 </g>
-            </svg>
+            ))
+        ) : (
+            <>
+            {renderTerritories()}
+            {renderLabelsAndMarkers()}
+            </>
+        )}
+        </g>
+        </svg>
         </div>
     );
 };
