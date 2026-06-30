@@ -28,9 +28,9 @@ const eventIcons: { [key in WorldEvent['type']]: string } = {
 export default function EventLog({ events, onClose }: EventLogProps) {
   return (
     <div className="bg-gray-900 p-4 flex flex-col h-full overflow-y-hidden">
-      <div className="flex justify-between items-center mb-3 flex-shrink-0">
+      <div className="flex items-center mb-3 flex-shrink-0">
+        <button onClick={onClose} className="text-gray-400 hover:text-white transition text-2xl leading-none mr-3">&times;</button>
         <h2 className="text-lg font-bold text-white">World Events</h2>
-        <button onClick={onClose} className="text-gray-400 hover:text-white transition text-2xl leading-none">&times;</button>
       </div>
       <div className="space-y-4 flex-1 overflow-y-auto pr-2">
         {events.map((event, index) => (

@@ -6,18 +6,18 @@ import { zoom, zoomIdentity } from 'd3-zoom';
 import { select } from 'd3-selection';
 
 interface WorldMapProps {
-  territories: { [id: string]: Territory };
-  countries: { [name: string]: Country };
-  cities?: City[];
-  militaryUnits?: { [id: string]: MilitaryUnit };
-  selectedUnit?: MilitaryUnit | null;
-  mapData: MapData;
-  onTerritoryClick?: (territoryId: string) => void;
-  onUnitClick?: (unitId: string) => void;
-  playerCountryName: string | null;
-  selectionMode?: boolean;
-  selectedName?: string | null;
-  selectionType?: 'country' | 'territory';
+    territories: { [id: string]: Territory };
+    countries: { [name: string]: Country };
+    cities?: City[];
+    militaryUnits?: { [id: string]: MilitaryUnit };
+    selectedUnit?: MilitaryUnit | null;
+    mapData: MapData;
+    onTerritoryClick?: (territoryId: string) => void;
+    onUnitClick?: (unitId: string) => void;
+    playerCountryName: string | null;
+    selectionMode?: boolean;
+    selectedName?: string | null;
+    selectionType?: 'country' | 'territory';
 }
 
 const subdividedCountries = ['United States of America'];
@@ -32,50 +32,61 @@ const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
     } : null;
 };
 
-const isColorBlueish = (hexColor: string): boolean => {
-    const rgb = hexToRgb(hexColor);
-    if (!rgb) return false;
-    // Check if blue is the dominant color and it's not too dark/gray
-    return rgb.b > rgb.r && rgb.b > rgb.g && rgb.b > 80;
-};
-
 // --- Unit Icon Definitions ---
 const UNIT_ICON_PATHS: { [key in UnitType]: string } = {
-  [UnitType.ARMY]: "M0,-4 L4,2 L0,0 L-4,2 Z",      // Chevron for land units
-  [UnitType.NAVY]: "M-5,2 L5,2 L3,-3 L-3,-3 Z",    // Simple ship hull
-  [UnitType.AIR_FORCE]: "M0,-5 L4,2 L0,1 L-4,2 Z", // Simple jet shape
+    [UnitType.ARMY]: "M0,-4 L4,2 L0,0 L-4,2 Z",      // Chevron for land units
+    [UnitType.NAVY]: "M-5,2 L5,2 L3,-3 L-3,-3 Z",    // Simple ship hull
+    [UnitType.AIR_FORCE]: "M0,-5 L4,2 L0,1 L-4,2 Z", // Simple jet shape
 };
 
 // --- Main Component ---
 const WorldMap = ({
-  territories,
-  countries,
-  cities = [],
-  militaryUnits = {},
-  selectedUnit = null,
-  mapData,
-  onTerritoryClick = () => {},
-  onUnitClick = () => {},
-  playerCountryName,
-  selectionMode = false,
-  selectedName = null,
-  selectionType = 'country',
+    territories,
+    countries,
+    cities = [],
+    militaryUnits = {},
+    selectedUnit = null,
+    mapData,
+    onTerritoryClick = () => {},
+                  onUnitClick = () => {},
+                  playerCountryName,
+                  selectionMode = false,
+                  selectedName = null,
+                  selectionType = 'country',
 }: WorldMapProps) => {
     const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
-    const [transform, setTransform] = useState(zoomIdentity);
     const svgRef = useRef<SVGSVGElement>(null);
+    const [transform, setTransform] = useState(zoomIdentity);
+    const transformRef = useRef(zoomIdentity);
     const [{ width, height }, setDimensions] = useState({ width: 0, height: 0 });
     const [worldWidth, setWorldWidth] = useState(0);
-    
+
     // --- D3 Zoom & Pan Setup ---
+
     useEffect(() => {
         if (!svgRef.current || !width || !height) return;
-        const svg = select(svgRef.current as SVGSVGElement);
+        const svg = select(svgRef.current);
+
         const zoomBehavior = zoom()
-            .scaleExtent([1, 50]) // Min zoom is 1 (default), max is 50x.
-            .on('zoom', (event) => {
-                setTransform(event.transform);
-            });
+        .scaleExtent([1, 50]) // Min zoom is 1 (default), max is 50x.
+        .translateExtent([
+            [-Infinity, projection([0, 85])[1]],
+                         [Infinity, projection([0, -85])[1]],
+        ]) // World borders
+        .on('zoom', (event) => {
+            // Update the DOM immediately for cam
+            svg.select('g').attr('transform', event.transform.toString());
+            transformRef.current = event.transform;
+
+            // Throttle React state updates
+            if (!transformRef.current._raf) {
+                transformRef.current._raf = requestAnimationFrame(() => {
+                    setTransform(transformRef.current!);
+                    transformRef.current!._raf = undefined;
+                });
+            }
+        });
+
         svg.call(zoomBehavior);
     }, [width, height]);
 
@@ -96,9 +107,9 @@ const WorldMap = ({
     // --- Projection Logic ---
     const projection = useMemo(() => {
         return geoMercator()
-            .scale(width / 6)
-            .center([0, 20])
-            .translate([width / 2, height / 2]);
+        .scale(width / 6)
+        .center([0, 20])
+        .translate([width / 2, height / 2]);
     }, [width, height]);
 
     const pathGenerator = useMemo(() => geoPath().projection(projection), [projection]);
@@ -123,7 +134,7 @@ const WorldMap = ({
         const usFeatures = (feature(mapData.us, mapData.us.objects.states as any) as any).features;
         return [
             ...worldFeatures.map(f => ({ geo: f, type: 'world' })),
-            ...usFeatures.map(f => ({ geo: f, type: 'us' })),
+                                   ...usFeatures.map(f => ({ geo: f, type: 'us' })),
         ];
     }, [mapData]);
 
@@ -134,281 +145,288 @@ const WorldMap = ({
             default: return `${type.toUpperCase()}-${geo.properties.name}`;
         }
     };
-    
+
     // --- Render Logic ---
     const renderTerritories = () => {
         return allGeographies
-            .filter(({ geo, type }) => {
-                // In selection mode, filter out world geographies that are subdivided
-                if (selectionMode && type === 'world') {
-                    return !subdividedCountries.includes(geo.properties.name);
-                }
-                return true;
-            })
-            .map(({ geo, type }) => {
-                const territoryId = getTerritoryId(geo, type);
-                const territory = territories[territoryId];
-                if (!territory) return null;
+        .filter(({ geo, type }) => {
+            // In selection mode, filter out world geographies that are subdivided
+            if (selectionMode && type === 'world') {
+                return !subdividedCountries.includes(geo.properties.name);
+            }
+            return true;
+        })
+        .map(({ geo, type }) => {
+            const territoryId = getTerritoryId(geo, type);
+            const territory = territories[territoryId];
+            if (!territory) return null;
 
-                const parentCountryName = territory.parentCountryName;
-                const owner = countries[territory.owner];
-                const isClickable = owner && owner.name !== 'Unclaimed';
+            const parentCountryName = territory.parentCountryName;
+            const owner = countries[territory.owner];
+            const isClickable = owner && owner.name !== 'Unclaimed';
 
-                // SELECTION MODE STYLES
-                if (selectionMode) {
-                    const isParentSelected = selectionType === 'country' && parentCountryName === selectedName;
-                    const isThisTerritorySelected = selectionType === 'territory' && territory.name === selectedName;
-                    const isSelectable = !!countries[parentCountryName];
+            // SELECTION MODE STYLES
+        if (selectionMode) {
+            const isParentSelected = selectionType === 'country' && parentCountryName === selectedName;
+            const isThisTerritorySelected = selectionType === 'territory' && territory.name === selectedName;
+            const isSelectable = !!countries[parentCountryName];
 
-                    const getFillColor = () => {
-                        if (isThisTerritorySelected) return '#FBBF24'; // Gold for seceding state
-                        if (isParentSelected) return '#3B82F6';
-                        return countries[parentCountryName]?.color || '#374151';
-                    };
-                    const getStrokeColor = () => {
-                        if (isThisTerritorySelected) return '#FDE68A';
-                        if (isParentSelected) return '#E5E7EB';
-                        return '#4B5563';
-                    };
-                    return (
-                        <path
-                            key={`${type}-${geo.rsmKey}`}
-                            d={pathGenerator(geo) || ''}
-                            fill={getFillColor()}
-                            stroke={getStrokeColor()}
-                            strokeWidth={isParentSelected || isThisTerritorySelected ? 0.7 / transform.k : 0.5 / transform.k}
-                            onClick={() => onTerritoryClick(territoryId)}
-                            className={isSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}
-                            style={{ opacity: isSelectable ? 1 : 0.5 }}
-                        />
-                    );
-                }
+            const getFillColor = () => {
+                if (isThisTerritorySelected) return '#FBBF24'; // Gold for seceding state
+                if (isParentSelected) return '#3B82F6';
+                return countries[parentCountryName]?.color || '#374151';
+            };
+            return (
+                <path
+                key={`${type}-${geo.rsmKey}`}
+                d={pathGenerator(geo) || ''}
+                fill={getFillColor()}
+                stroke={'#000000'}
+                strokeWidth={isParentSelected || isThisTerritorySelected ? 2  : 1 }
+                onClick={() => onTerritoryClick(territoryId)}
+                className={isSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}
+                style={{ opacity: isSelectable ? 1 : 0.5, vectorEffect: 'non-scaling-stroke' }}
+                />
+            );
+        }
 
-                // GAMEPLAY MODE STYLES
-                const fillColor = owner ? owner.color : '#374151';
-                const defaultStrokeColor = owner && isColorBlueish(owner.color) ? '#9CA3AF' : '#111827';
-                return (
-                    <path
-                        key={`${type}-${geo.rsmKey}`}
-                        d={pathGenerator(geo) || ''}
-                        fill={fillColor}
-                        stroke={hoveredCountry === owner?.name ? '#FFFFFF' : defaultStrokeColor}
-                        strokeWidth={hoveredCountry === owner?.name ? 1.2 / transform.k : 0.5 / transform.k}
-                        className={isClickable ? 'cursor-pointer' : ''}
-                        onClick={() => isClickable && onTerritoryClick(territoryId)}
-                        onMouseEnter={() => owner && setHoveredCountry(owner.name)}
-                        onMouseLeave={() => setHoveredCountry(null)}
-                    />
-                );
-            });
+        // GAMEPLAY MODE STYLES
+        const fillColor = owner ? owner.color : '#374151';
+        return (
+            <path
+            key={`${type}-${geo.rsmKey}`}
+            d={pathGenerator(geo) || ''}
+            fill={fillColor}
+            stroke={hoveredCountry === owner?.name ? '#FFFFFF' : '#000000'}
+            strokeWidth={hoveredCountry === owner?.name ? 2 : 1 }
+            style={{ vectorEffect: 'non-scaling-stroke', filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.25))' }}
+            className={isClickable ? 'cursor-pointer' : ''}
+            onClick={() => isClickable && onTerritoryClick(territoryId)}
+            onMouseEnter={() => owner && setHoveredCountry(owner.name)}
+            onMouseLeave={() => setHoveredCountry(null)}
+            />
+        );
+        });
     };
-    
+
     // --- Gameplay Labels & Markers ---
     const allCountryLabelData = useMemo(() => {
-      const featuresByTerritoryId: { [id: string]: any } = {};
-      allGeographies.forEach(({geo, type}) => {
-          const territoryId = getTerritoryId(geo, type);
-          featuresByTerritoryId[territoryId] = geo;
-      });
+        const featuresByTerritoryId: { [id: string]: any } = {};
+        allGeographies.forEach(({geo, type}) => {
+            const territoryId = getTerritoryId(geo, type);
+            featuresByTerritoryId[territoryId] = geo;
+        });
 
-      return Object.values(countries)
-          .map(country => {
-              const countryTerritories = Object.values(territories).filter(t => t.owner === country.name);
-              if (countryTerritories.length === 0) return null;
+        return Object.values(countries)
+        .map(country => {
+            const countryTerritories = Object.values(territories).filter(t => t.owner === country.name);
+            if (countryTerritories.length === 0) return null;
 
-              let largestGeoArea = 0;
-              let largestTerritoryGeo: any = null;
+            let largestGeoArea = 0;
+            let largestTerritoryGeo: any = null;
 
-              if (country.labelCoordinates) {
-                  // If custom coords are provided, just find the largest territory for area calculation.
-                  countryTerritories.forEach(t => {
-                      const feature = featuresByTerritoryId[t.id];
-                      if (feature) {
-                          const area = geoArea(feature);
-                          if (area > largestGeoArea) {
-                              largestGeoArea = area;
-                              largestTerritoryGeo = feature;
-                          }
-                      }
-                  });
-              } else {
-                  // Find the largest territory to place the centroid in.
-                  countryTerritories.forEach(t => {
-                      const feature = featuresByTerritoryId[t.id];
-                      if (feature) {
-                          const area = geoArea(feature);
-                          if (area > largestGeoArea) {
-                              largestGeoArea = area;
-                              largestTerritoryGeo = feature;
-                          }
-                      }
-                  });
-              }
-              
-              if (!largestTerritoryGeo) return null;
+            if (country.labelCoordinates) {
+                // If custom coords are provided, just find the largest territory for area calculation.
+                countryTerritories.forEach(t => {
+                    const feature = featuresByTerritoryId[t.id];
+                    if (feature) {
+                        const area = geoArea(feature);
+                        if (area > largestGeoArea) {
+                            largestGeoArea = area;
+                            largestTerritoryGeo = feature;
+                        }
+                    }
+                });
+            } else {
+                // Find the largest territory to place the centroid in.
+                countryTerritories.forEach(t => {
+                    const feature = featuresByTerritoryId[t.id];
+                    if (feature) {
+                        const area = geoArea(feature);
+                        if (area > largestGeoArea) {
+                            largestGeoArea = area;
+                            largestTerritoryGeo = feature;
+                        }
+                    }
+                });
+            }
 
-              const centroid = country.labelCoordinates ? country.labelCoordinates : geoCentroid(largestTerritoryGeo);
-              if (!centroid || isNaN(centroid[0]) || isNaN(centroid[1])) return null;
-              
-              const coords = projection(centroid as [number, number]);
-              if (!coords) return null; // Don't render if off-screen
+            if (!largestTerritoryGeo) return null;
 
-              // --- Dynamic Font Size Calculation ---
-              const projectedArea = pathGenerator.area(largestTerritoryGeo);
-              const displayName = country.labelName || country.name;
+            const centroid = country.labelCoordinates ? country.labelCoordinates : geoCentroid(largestTerritoryGeo);
+            if (!centroid || isNaN(centroid[0]) || isNaN(centroid[1])) return null;
 
-              // Heuristic to determine font size.
-              // Proportional to sqrt of area (like a radius), inversely proportional to name length.
-              const fontScale = 1.6; // Tuning parameter
-              const minFontSize = 2.5;
-              const maxFontSize = 18.0;
+            const coords = projection(centroid as [number, number]);
+            if (!coords) return null; // Don't render if off-screen
 
-              let baseFontSize = (Math.sqrt(projectedArea) / displayName.length) * fontScale;
-              
-              // Give a boost to multi-word names so they don't get penalized too heavily by length.
-              if (displayName.includes(' ')) {
+            // --- Dynamic Font Size Calculation ---
+            const projectedArea = pathGenerator.area(largestTerritoryGeo);
+            const displayName = country.labelName || country.name;
+
+            // Heuristic to determine font size.
+            // Proportional to sqrt of area (like a radius), inversely proportional to name length.
+            const fontScale = 1.6; // Tuning parameter
+            const minFontSize = 2.5;
+            const maxFontSize = 20.0;
+
+            let baseFontSize = (Math.sqrt(projectedArea) / displayName.length) * fontScale;
+
+            // Give a boost to multi-word names so they don't get penalized too heavily by length.
+            if (displayName.includes(' ')) {
                 baseFontSize *= 1.4;
-              }
+            }
 
-              // Clamp the font size to reasonable limits.
-              baseFontSize = Math.max(minFontSize, Math.min(maxFontSize, baseFontSize));
+            // Clamp the font size to reasonable limits.
+            baseFontSize = Math.max(minFontSize, Math.min(maxFontSize, baseFontSize));
 
-              return { name: country.name, coords, baseFontSize };
-          })
-          .filter((c): c is { name: string; coords: [number, number]; baseFontSize: number; } => c !== null);
+            return { name: country.name, coords, baseFontSize };
+        })
+        .filter((c): c is { name: string; coords: [number, number]; baseFontSize: number; } => c !== null);
 
-  }, [territories, countries, allGeographies, projection, pathGenerator]);
+    }, [territories, countries, allGeographies, projection, pathGenerator]);
 
 
     const renderLabelsAndMarkers = () => {
         if (selectionMode) return null;
 
-        const citiesToShow = (!hoveredCountry || transform.k < 1.5) ? [] : cities.filter(city => {
+        const citiesToShow = (transform.k < 1.5) ? [] : cities.filter(city => {
             const territory = territories[city.territoryId];
-            return territory && territory.owner === hoveredCountry;
+            return territory;
         });
 
         return (
             <>
-                {/* COUNTRY LABELS */}
-                {allCountryLabelData.map(({ name, coords, baseFontSize }) => {
-                    const country = countries[name];
-                    if (!country) return null;
-                    
-                    const finalSize = baseFontSize / Math.sqrt(transform.k);
+            {/* COUNTRY LABELS */}
+            {allCountryLabelData.map(({ name, coords, baseFontSize }) => {
+                const country = countries[name];
+                if (!country) return null;
 
-                    // Hide labels that become too small, especially when slightly zoomed in.
-                    if (finalSize < 2.0 && transform.k > 1.1) return null;
+                const finalSize = baseFontSize / Math.sqrt(transform.k);
 
-                    return (
-                        <text
-                            key={`label-${name}`}
-                            x={coords[0]}
-                            y={coords[1]}
-                            textAnchor="middle"
-                            alignmentBaseline="middle"
-                            stroke="#111827"
-                            strokeWidth={0.4 / transform.k}
-                            strokeLinejoin="round"
-                            className="pointer-events-none font-semibold"
-                            style={{ fill: "#FFFFFF", fontSize: `${finalSize}px`, fontFamily: "Inter, system-ui, sans-serif" }}
-                        >
-                            {country.labelName || name}
-                        </text>
-                    );
-                })}
+                // Hide labels that become too small, especially when slightly zoomed in.
+                if (finalSize < 2.0 && transform.k > 1.1) return null;
 
-                {/* CITY MARKERS */}
-                {citiesToShow.map(city => {
-                    const territory = territories[city.territoryId];
-                    if (!territory) return null;
-                    const owner = countries[territory.owner];
-                    const ownerColor = owner ? owner.color : '#9CA3AF';
-                    const coords = projection(city.coordinates);
-                    if (!coords) return null;
+                return (
+                    <text
+                    key={`label-${name}`}
+                    x={coords[0]}
+                    y={coords[1]}
+                    textAnchor="middle"
+                    alignmentBaseline="middle"
+                    stroke="#111827"
+                    strokeWidth={0.4}
+                    strokeLinejoin="round"
+                    className="pointer-events-none font-semibold"
+                    style={{fill: "#E5E7EB", fontSize: `${finalSize}px`, fontFamily: "'Inter', 'Tahoma', sans-serif", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", opacity: 0.9, vectorEffect: 'non-scaling-stroke'}}
+                    >
+                    {country.labelName || name}
+                    </text>
+                );
+            })}
 
-                    return (
-                         <g key={city.id} transform={`translate(${coords[0]}, ${coords[1]}) scale(${1 / transform.k})`}>
-                            {city.isCapital ? (
-                                <path d="M0 -4 L1.5 -1.2 L4.5 -1.2 L2.5 0.5 L3.2 3.5 L0 2 L-3.2 3.5 L-2.5 0.5 L-4.5 -1.2 L-1.5 -1.2 Z" fill={ownerColor} stroke="#FFFFFF" strokeWidth={0.75} />
-                            ) : (
-                                <rect x="-2" y="-2" width="4" height="4" fill={ownerColor} stroke="#FFFFFF" strokeWidth={0.75} />
-                            )}
-                            <text textAnchor="middle" y={-8} stroke="#1F2937" strokeWidth="0.2" strokeLinejoin="round" className="pointer-events-none font-semibold" style={{ fontFamily: "Inter, system-ui, sans-serif", fill: "#FFFFFF", fontSize: 9 }}>
-                                {city.name}
-                            </text>
-                        </g>
-                    );
-                })}
-                
-                {/* UNIT MARKERS */}
-                {Object.values(militaryUnits).map(unit => {
-                     const coords = projection(unit.coordinates);
-                     if (!coords) return null;
+            {/* CITY MARKERS */}
+            {citiesToShow.map(city => {
+                const territory = territories[city.territoryId];
+                if (!territory) return null;
+                const owner = countries[territory.owner];
+                const ownerColor = owner ? owner.color : '#9CA3AF';
+                const coords = projection(city.coordinates);
+                if (!coords) return null;
 
-                     const owner = countries[unit.owner];
-                     const ownerColor = owner ? owner.color : '#9CA3AF';
-                     const iconScale = 0.8 / Math.sqrt(transform.k);
-                     const isSelected = selectedUnit?.id === unit.id;
-                     const finalScale = isSelected ? iconScale * 1.5 : iconScale;
+                return (
+                    <g key={city.id} transform={`translate(${coords[0]}, ${coords[1]}) scale(${1 / transform.k})`}>
+                    {city.isCapital ? (
+                        <path d="M0 -4 L1.5 -1.2 L4.5 -1.2 L2.5 0.5 L3.2 3.5 L0 2 L-3.2 3.5 L-2.5 0.5 L-4.5 -1.2 L-1.5 -1.2 Z" fill={ownerColor} stroke="#FFFFFF" strokeWidth={0.75} />
+                    ) : (
+                        <rect x="-2" y="-2" width="4" height="4" fill={ownerColor} stroke="#FFFFFF" strokeWidth={0.75} />
+                    )}
+                    <text textAnchor="middle" y={-8} stroke="#1F2937" strokeWidth="0.2" strokeLinejoin="round" className="pointer-events-none font-semibold" style={{ fontFamily: "Inter, system-ui, sans-serif", fill: "#FFFFFF", fontSize: 9 }}>
+                    {city.name}
+                    </text>
+                    </g>
+                );
+            })}
 
-                     return (
-                        <g key={unit.id} transform={`translate(${coords[0]}, ${coords[1]})`}
-                           onClick={() => onUnitClick(unit.id)}
-                           className="cursor-pointer"
-                           onMouseEnter={() => setHoveredCountry(unit.owner)}
-                           onMouseLeave={() => setHoveredCountry(null)}
-                        >
-                            <path 
-                                d={UNIT_ICON_PATHS[unit.type]}
-                                transform={`scale(${finalScale})`}
-                                fill={ownerColor}
-                                stroke={isSelected ? "#FBBF24" : "#FFFFFF"}
-                                strokeWidth={(isSelected ? 1.5 : 0.75) / transform.k}
-                                className="transition-all duration-200"
-                                strokeLinejoin="round"
-                            />
-                             <text
-                                textAnchor="middle"
-                                y={(isSelected ? -10 : -8) / Math.sqrt(transform.k)}
-                                stroke="#1F2937"
-                                strokeWidth={0.2 / transform.k}
-                                strokeLinejoin="round"
-                                className="pointer-events-none font-semibold"
-                                style={{
-                                    fontFamily: "Inter, system-ui, sans-serif",
-                                    fill: "#FFFFFF",
-                                    fontSize: `${6 / transform.k}px`,
-                                }}
-                            >
-                               {transform.k > 2 ? unit.name : ""}
-                            </text>
-                        </g>
-                     );
-                })}
+            {/* UNIT MARKERS */}
+            {Object.values(militaryUnits).map(unit => {
+                const coords = projection(unit.coordinates);
+                if (!coords) return null;
+
+                const owner = countries[unit.owner];
+                const ownerColor = owner ? owner.color : '#9CA3AF';
+                const iconScale = 0.8 / Math.sqrt(transform.k);
+                const isSelected = selectedUnit?.id === unit.id;
+                const finalScale = isSelected ? iconScale * 1.5 : iconScale;
+
+                return (
+                    <g key={unit.id} transform={`translate(${coords[0]}, ${coords[1]})`}
+                    onClick={() => onUnitClick(unit.id)}
+                    className="cursor-pointer"
+                    onMouseEnter={() => setHoveredCountry(unit.owner)}
+                    onMouseLeave={() => setHoveredCountry(null)}
+                    >
+                    <path
+                    d={UNIT_ICON_PATHS[unit.type]}
+                    transform={`scale(${finalScale})`}
+                    fill={ownerColor}
+                    stroke={isSelected ? "#FBBF24" : "#FFFFFF"}
+                    strokeWidth={(isSelected ? 1.5 : 0.75) / transform.k}
+                    className="transition-all duration-200"
+                    strokeLinejoin="round"
+                    />
+                    <text
+                    textAnchor="middle"
+                    y={(isSelected ? -10 : -8) / Math.sqrt(transform.k)}
+                    stroke="#1F2937"
+                    strokeWidth={0.2 / transform.k}
+                    strokeLinejoin="round"
+                    className="pointer-events-none font-semibold"
+                    style={{
+                        fontFamily: "Inter, system-ui, sans-serif",
+                        fill: "#FFFFFF",
+                        fontSize: `${6 / transform.k}px`,
+                    }}
+                    >
+                    {transform.k > 2 ? unit.name : ""}
+                    </text>
+                    </g>
+                );
+            })}
             </>
         );
     }
-    
+
+    // Only render 2 maps and move them
+    const visibleIndices = useMemo(() => {
+        if (worldWidth <= 0) return [0, 1];
+
+        const leftEdgeIndex = Math.floor(- (transform.x / transform.k) / worldWidth);
+
+        return [leftEdgeIndex, leftEdgeIndex + 1];
+    }, [transform.x, transform.k, worldWidth]);
+
+
     return (
-        <div className="w-full h-full bg-sky-800">
-            <svg ref={svgRef} width="100%" height="100%">
-                <g transform={transform.toString()}>
-                    {worldWidth > 0 ? (
-                        [-1, 0, 1].map(i => (
-                            <g key={i} transform={`translate(${i * worldWidth}, 0)`}>
-                                {renderTerritories()}
-                                {renderLabelsAndMarkers()}
-                            </g>
-                        ))
-                    ) : (
-                        <>
-                            {renderTerritories()}
-                            {renderLabelsAndMarkers()}
-                        </>
-                    )}
+        <div
+        className="w-full h-full"
+        style={{backgroundImage: `radial-gradient(circle, #075985 0%, #082f49 100%)`,}}>
+        <svg ref={svgRef} width="100%" height="100%">
+        <g transform={transform.toString()}>
+        {worldWidth > 0 ? (
+            visibleIndices.map(i => (
+                <g key={i} transform={`translate(${i * worldWidth}, 0)`}>
+                {renderTerritories()}
+                {renderLabelsAndMarkers()}
                 </g>
-            </svg>
+            ))
+        ) : (
+            <>
+            {renderTerritories()}
+            {renderLabelsAndMarkers()}
+            </>
+        )}
+        </g>
+        </svg>
         </div>
     );
 };
