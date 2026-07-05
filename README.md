@@ -1,13 +1,3 @@
-## Run Locally
+I started this project just to learn typescript. after starting over and remaking it this project has become so much more than I would have thought.
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
-
-
-Copyright (c) 2025 Nicholas Krol
+to find the repository for the current project, go here: https://github.com/Open-Historia/open-historia
